@@ -1,0 +1,26 @@
+services:
+  server:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - MQTT_BROKER=mqtt-broker
+      - MQTT_PORT=1883
+    depends_on:
+      - mqtt-broker
+    volumes:
+      - ./automation.db:/app/automation.db
+
+  mqtt-broker:
+    image: eclipse-mosquitto:latest
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-log:/mosquitto/log
+
+volumes:
+  mosquitto-data:
+  mosquitto-log:
