@@ -115,7 +115,7 @@ def toggle_device(device_id: str, db: Session = Depends(get_db)):
     db.commit()
 
     # Publish directly to the device-specific topic
-    mqtt_client.publish(device_id, str(new_state))
+    mqtt_client.publish(device_id, str(new_state), qos=1, retain=True)
 
     return {"id": device_id, "new_state": new_state}
 
