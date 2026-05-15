@@ -6,15 +6,26 @@ import { COLORS, SPACING } from '../constants/theme';
 interface HeaderProps {
   activeDevices: number;
   totalDevices: number;
+  userName?: string;
+  cabinCount?: number;
+  onLogout?: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ activeDevices, totalDevices }) => {
+const Header: React.FC<HeaderProps> = ({
+  activeDevices,
+  totalDevices,
+  userName,
+  cabinCount = 8,
+  onLogout,
+}) => {
   return (
     <View style={styles.container}>
       <View style={styles.topRow}>
         <View>
           <Text style={styles.greeting}>Smart Room</Text>
-          <Text style={styles.subtitle}>Control Panel</Text>
+          <Text style={styles.subtitle}>
+            {userName ? `Welcome, ${userName}` : 'Control Panel'}
+          </Text>
         </View>
 
         <View style={styles.actions}>
@@ -23,9 +34,15 @@ const Header: React.FC<HeaderProps> = ({ activeDevices, totalDevices }) => {
             <View style={styles.notifDot} />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.iconBtn}>
-            <Ionicons name="person-circle-outline" size={22} color={COLORS.textSecondary} />
-          </TouchableOpacity>
+          {onLogout ? (
+            <TouchableOpacity style={styles.iconBtn} onPress={onLogout}>
+              <Ionicons name="log-out-outline" size={22} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={styles.iconBtn}>
+              <Ionicons name="person-circle-outline" size={22} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -40,7 +57,7 @@ const Header: React.FC<HeaderProps> = ({ activeDevices, totalDevices }) => {
 
         <View style={styles.statChip}>
           <Ionicons name="grid-outline" size={12} color={COLORS.textMuted} />
-          <Text style={styles.statText}>8 Cabins</Text>
+          <Text style={styles.statText}>{cabinCount} Cabin{cabinCount !== 1 ? 's' : ''}</Text>
         </View>
       </View>
     </View>
@@ -88,7 +105,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.glassBorder,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: SPACING.sm, // ✅ replaces gap
+    marginLeft: SPACING.sm,
     position: 'relative',
   },
 
@@ -118,7 +135,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.sm,
     paddingVertical: 8,
     borderRadius: 10,
-    marginRight: SPACING.sm, // instead of gap
+    marginRight: SPACING.sm,
   },
 
   statDot: {

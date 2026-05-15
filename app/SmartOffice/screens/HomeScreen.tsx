@@ -1,30 +1,61 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
+  Text,
   StyleSheet,
   FlatList,
-  Dimensions,
   StatusBar,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
 
-import { COLORS, SPACING } from '../constants/theme';
+import { COLORS, SPACING, RADIUS } from '../constants/theme';
 import { Cabin, INITIAL_CABINS } from '../constants/cabinData';
+import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header';
 import CabinCard from '../components/CabinCard';
-import BottomNav from '../components/BottomNav';
+import BottomNav, { TabName } from '../components/BottomNav';
 import MasterControl from '../components/MasterControl';
+import AdminUsersScreen from './AdminUsersScreen';
 
-const { width } = Dimensions.get('window');
-const CARD_MARGIN = SPACING.sm / 2;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const NUM_COLUMNS = 2;
 
-type TabName = 'home' | 'devices' | 'automation' | 'settings';
+const TIMING = { duration: 280, easing: Easing.out(Easing.cubic) };
 
 const HomeScreen: React.FC = () => {
+  const { user, logout } = useAuth();
   const [cabins, setCabins] = useState<Cabin[]>(INITIAL_CABINS);
   const [activeTab, setActiveTab] = useState<TabName>('home');
+
+  const isAdmin = user?.role === 'admin';
+
+  // 0 = home visible, 1 = users visible
+  const offset = useSharedValue(0);
+
+  useEffect(() => {
+    offset.value = withTiming(activeTab === 'users' ? 1 : 0, TIMING);
+  }, [activeTab]);
+
+  const homeAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: offset.value * -SCREEN_WIDTH }],
+  }));
+
+  const usersAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: (1 - offset.value) * SCREEN_WIDTH }],
+  }));
+
+  const visibleCabins = useMemo(
+    () => (isAdmin ? cabins : cabins.filter((c) => c.id === user?.assignedCabinId)),
+    [cabins, isAdmin, user?.assignedCabinId]
+  );
 
   const toggleLight = useCallback((cabinId: string) => {
     setCabins((prev) =>
@@ -68,11 +99,11 @@ const HomeScreen: React.FC = () => {
     );
   }, []);
 
-  const activeDevices = cabins.reduce(
+  const activeDevices = visibleCabins.reduce(
     (acc, c) => acc + (c.light.isOn ? 1 : 0) + (c.fan.isOn ? 1 : 0),
     0
   );
-  const totalDevices = cabins.length * 2;
+  const totalDevices = visibleCabins.length * 2;
 
   const renderCabin = ({ item }: { item: Cabin }) => (
     <CabinCard
@@ -83,81 +114,138 @@ const HomeScreen: React.FC = () => {
     />
   );
 
+  const hasNoCabin = !isAdmin && !user?.assignedCabinId;
+
   return (
     <View style={styles.root}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
-
-      {/* Ambient glow blobs */}
       <View style={styles.glowTopLeft} />
       <View style={styles.glowBottomRight} />
 
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <Header activeDevices={activeDevices} totalDevices={totalDevices} />
+      {/* Sliding content area */}
+      <View style={styles.pages}>
 
-        <FlatList
-          data={cabins}
-          renderItem={renderCabin}
-          keyExtractor={(item) => item.id}
-          numColumns={NUM_COLUMNS}
-          contentContainerStyle={styles.grid}
-          columnWrapperStyle={styles.row}
-          showsVerticalScrollIndicator={false}
-          ListHeaderComponent={
-            <MasterControl
-              onAllLightsOn={allLightsOn}
-              onAllLightsOff={allLightsOff}
-              onAllFansOn={allFansOn}
-              onAllFansOff={allFansOff}
-              onAllOff={allOff}
+        {/* Home tab */}
+        <Animated.View
+          style={[StyleSheet.absoluteFill, homeAnimStyle]}
+          pointerEvents={activeTab === 'home' ? 'auto' : 'none'}
+        >
+          <SafeAreaView style={styles.safeArea} edges={['top']}>
+            <Header
+              activeDevices={activeDevices}
+              totalDevices={totalDevices}
+              userName={user?.name}
+              cabinCount={visibleCabins.length}
+              onLogout={logout}
             />
-          }
-        />
 
+            {hasNoCabin ? (
+              <View style={styles.noCabin}>
+                <View style={styles.noCabinIcon}>
+                  <Ionicons name="time-outline" size={36} color={COLORS.textMuted} />
+                </View>
+                <Text style={styles.noCabinTitle}>Awaiting Assignment</Text>
+                <Text style={styles.noCabinSubtitle}>
+                  Your account is active but no cabin has been assigned yet.{'\n'}
+                  Please contact the admin.
+                </Text>
+                <View style={styles.noCabinHint}>
+                  <Ionicons name="person-outline" size={13} color={COLORS.accent} />
+                  <Text style={styles.noCabinHintText}>admin@smartoffice.com</Text>
+                </View>
+              </View>
+            ) : (
+              <FlatList
+                data={visibleCabins}
+                renderItem={renderCabin}
+                keyExtractor={(item) => item.id}
+                numColumns={NUM_COLUMNS}
+                contentContainerStyle={styles.grid}
+                columnWrapperStyle={visibleCabins.length > 1 ? styles.row : undefined}
+                showsVerticalScrollIndicator={false}
+                ListHeaderComponent={
+                  isAdmin ? (
+                    <MasterControl
+                      onAllLightsOn={allLightsOn}
+                      onAllLightsOff={allLightsOff}
+                      onAllFansOn={allFansOn}
+                      onAllFansOff={allFansOff}
+                      onAllOff={allOff}
+                    />
+                  ) : null
+                }
+              />
+            )}
+          </SafeAreaView>
+        </Animated.View>
+
+        {/* Users tab (admin only) */}
+        {isAdmin && (
+          <Animated.View
+            style={[StyleSheet.absoluteFill, usersAnimStyle]}
+            pointerEvents={activeTab === 'users' ? 'auto' : 'none'}
+          >
+            <AdminUsersScreen />
+          </Animated.View>
+        )}
+      </View>
+
+      {/* Bottom nav — admin only, always on top */}
+      {isAdmin && (
         <SafeAreaView edges={['bottom']} style={styles.navWrapper}>
           <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
         </SafeAreaView>
-      </SafeAreaView>
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  safeArea: {
-    flex: 1,
-  },
+  root: { flex: 1, backgroundColor: COLORS.background },
+  pages: { flex: 1, overflow: 'hidden' },
+  safeArea: { flex: 1 },
   glowTopLeft: {
-    position: 'absolute',
-    top: -60,
-    left: -60,
-    width: 220,
-    height: 220,
-    borderRadius: 110,
+    position: 'absolute', top: -60, left: -60,
+    width: 220, height: 220, borderRadius: 110,
     backgroundColor: 'rgba(255,122,0,0.08)',
-    // blur simulated via large border radius & opacity
   },
   glowBottomRight: {
-    position: 'absolute',
-    bottom: 80,
-    right: -80,
-    width: 260,
-    height: 260,
-    borderRadius: 130,
+    position: 'absolute', bottom: 80, right: -80,
+    width: 260, height: 260, borderRadius: 130,
     backgroundColor: 'rgba(255,122,0,0.05)',
   },
   grid: {
     paddingHorizontal: SPACING.xl - SPACING.sm / 2,
     paddingBottom: SPACING.xl,
   },
-  row: {
-    justifyContent: 'space-between',
+  row: { justifyContent: 'space-between' },
+  navWrapper: { backgroundColor: 'transparent' },
+  noCabin: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: SPACING.xxxl,
   },
-  navWrapper: {
-    backgroundColor: 'transparent',
+  noCabinIcon: {
+    width: 80, height: 80, borderRadius: 40,
+    backgroundColor: COLORS.glass,
+    borderWidth: 1, borderColor: COLORS.glassBorder,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: SPACING.lg,
   },
+  noCabinTitle: {
+    color: COLORS.text, fontSize: 20, fontWeight: '700',
+    letterSpacing: -0.4, marginBottom: SPACING.sm,
+  },
+  noCabinSubtitle: {
+    color: COLORS.textMuted, fontSize: 14, textAlign: 'center',
+    lineHeight: 22, marginBottom: SPACING.lg,
+  },
+  noCabinHint: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(255,122,0,0.08)',
+    borderWidth: 1, borderColor: 'rgba(255,122,0,0.2)',
+    borderRadius: RADIUS.full, paddingHorizontal: SPACING.md, paddingVertical: 8,
+  },
+  noCabinHintText: { color: COLORS.accent, fontSize: 13, fontWeight: '500', marginLeft: SPACING.xs },
 });
 
 export default HomeScreen;

@@ -3,21 +3,21 @@ import { View, TouchableOpacity, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
 
-type TabName = 'home' | 'devices' | 'automation' | 'settings';
+export type TabName = 'home' | 'users';
 
 interface BottomNavProps {
   activeTab: TabName;
   onTabChange: (tab: TabName) => void;
 }
 
-const tabs: { name: TabName; icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
+const ADMIN_TABS: { name: TabName; icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
   { name: 'home', icon: 'home-outline', label: 'Home' },
-  { name: 'devices', icon: 'hardware-chip-outline', label: 'Devices' },
-  { name: 'automation', icon: 'flash-outline', label: 'Auto' },
-  { name: 'settings', icon: 'settings-outline', label: 'Settings' },
+  { name: 'users', icon: 'people-outline', label: 'Users' },
 ];
 
 const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) => {
+  const tabs = ADMIN_TABS;
+
   return (
     <View style={styles.wrapper}>
       <View style={styles.container}>
@@ -40,10 +40,6 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange }) => {
           );
         })}
 
-        {/* FAB */}
-        <TouchableOpacity style={styles.fab} activeOpacity={0.8}>
-          <Ionicons name="add" size={22} color="#fff" />
-        </TouchableOpacity>
       </View>
     </View>
   );
@@ -84,20 +80,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
-  },
-  fab: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 6,
-    marginLeft: SPACING.xs,
   },
 });
 
