@@ -22,10 +22,9 @@ A FastAPI-based backend for managing device states via SQLite and MQTT.
    ```
 
 2. Run the server:
-   ```bash
-   python main.py
-   ```
-
+    ```bash
+    python server.py
+    ```
 ## API Usage
 
 ### Get all states

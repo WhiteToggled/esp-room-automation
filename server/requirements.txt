@@ -2,3 +2,10 @@ fastapi
 uvicorn
 sqlalchemy
 paho-mqtt
+pysqlcipher3
+PyJWT
+passlib[bcrypt]
+bcrypt==3.1.7
+python-multipart
+apscheduler
+cryptography

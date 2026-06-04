@@ -1,23 +1,92 @@
 import os
 import json
-from typing import List, Dict
-from datetime import datetime
+from typing import List, Dict, Optional
+from datetime import datetime, timedelta
 
-from fastapi import FastAPI, Depends, HTTPException, Query
+# Monkeypatch SQLAlchemy's SQLite dialect for pysqlcipher3 compatibility
+import sqlalchemy.dialects.sqlite.pysqlite as pysqlite
+import sqlalchemy.dialects.sqlite.pysqlcipher as pysqlcipher
+from sqlalchemy.dialects.sqlite.pysqlite import SQLiteDialect_pysqlite
+import re
+
+def _custom_regexp(pattern, item):
+    if item is None:
+        return False
+    try:
+        return re.search(pattern, str(item), re.I) is not None
+    except Exception:
+        return False
+
+def patched_set_regexp(dbapi_connection):
+    try:
+        # Try with deterministic=True (SQLAlchemy 2.0 default)
+        dbapi_connection.create_function(
+            "REGEXP", 2, _custom_regexp, deterministic=True
+        )
+    except TypeError:
+        # Fallback for pysqlcipher3 which doesn't support the deterministic argument
+        dbapi_connection.create_function(
+            "REGEXP", 2, _custom_regexp
+        )
+
+# Patch the module-level function in both dialects
+pysqlite.set_regexp = patched_set_regexp
+pysqlcipher.set_regexp = patched_set_regexp
+
+# Patch the class method to ensure it uses the patched function
+def patched_on_connect(self):
+    return patched_set_regexp
+
+SQLiteDialect_pysqlite.on_connect = patched_on_connect
+
+from fastapi import FastAPI, Depends, HTTPException, Query, status
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from sqlalchemy import create_engine, Column, String, Integer, DateTime, Text
 from contextlib import asynccontextmanager
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
 import paho.mqtt.client as mqtt
 from apscheduler.schedulers.background import BackgroundScheduler
+import jwt
+from passlib.context import CryptContext
 
 # --- Configuration ---
-DATABASE_URL = "sqlite:///./automation.db"
+# Use SQLCipher with a passphrase
+DB_PASSPHRASE = os.getenv("DB_PASSPHRASE", "default_secret_passphrase")
+DATABASE_URL = f"sqlite+pysqlcipher://:{DB_PASSPHRASE}@/./automation.db"
 MQTT_BROKER = os.getenv("MQTT_BROKER", "localhost")
 MQTT_PORT = int(os.getenv("MQTT_PORT", 1883))
 LOG_INTERVAL_MINUTES = int(os.getenv("LOG_INTERVAL_MINUTES", 5))
 
+# JWT Configuration
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-super-secret-key")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+# Password Hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+# --- In-Memory State ---
+# This dictionary stores the current state of devices, updated by MQTT
+device_states: Dict[str, int] = {}
+
+# --- Hardcoded Users (Signup is hardcoded as requested) ---
+USERS_DB = {
+    "admin": {
+        "username": "admin",
+        "hashed_password": pwd_context.hash("admin123"),
+        "role": "admin",
+    },
+    "owner": {
+        "username": "owner",
+        "hashed_password": pwd_context.hash("owner123"),
+        "role": "owner",
+    },
+}
+
 # --- Database Setup ---
+# SQLCipher requires a specific engine setup
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -26,7 +95,7 @@ Base = declarative_base()
 class Device(Base):
     __tablename__ = "devices"
     id = Column(String, primary_key=True, index=True)  # e.g., "r1/l1", "r1/f1"
-    state = Column(Integer, default=0)
+    # State is no longer stored in SQLite as per request
 
 
 class StateLog(Base):
@@ -56,6 +125,47 @@ class StateLogEntry(BaseModel):
         from_attributes = True
 
 
+# --- Auth Helpers ---
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except jwt.PyJWTError:
+        raise credentials_exception
+    user = USERS_DB.get(username)
+    if user is None:
+        raise credentials_exception
+    return user
+
+
+def require_admin(current_user: dict = Depends(get_current_user)):
+    if current_user["role"] != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Operation not permitted. Admin role required.",
+        )
+    return current_user
+
+
 # --- MQTT Setup ---
 mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 
@@ -63,11 +173,29 @@ mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 def on_connect(client, userdata, flags, rc, properties):
     if rc == 0:
         print("Connected to MQTT Broker!")
+        # Wildcard subscription to get all device states
+        client.subscribe("#")
     else:
         print(f"Failed to connect, return code {rc}")
 
 
+def on_message(client, userdata, msg):
+    """
+    Updates the in-memory device_states dictionary whenever a message arrives.
+    Assumes payload is '0' or '1'.
+    """
+    try:
+        topic = msg.topic
+        payload = msg.payload.decode()
+        if payload in ["0", "1"]:
+            device_states[topic] = int(payload)
+            print(f"State updated: {topic} -> {payload}")
+    except Exception as e:
+        print(f"Error processing MQTT message on {msg.topic}: {e}")
+
+
 mqtt_client.on_connect = on_connect
+mqtt_client.on_message = on_message
 
 try:
     mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
@@ -80,15 +208,19 @@ except Exception as e:
 def log_device_states():
     """
     Cron job that runs every LOG_INTERVAL_MINUTES minutes.
-    Reads all device states and writes a JSON snapshot to the state_logs table.
+    Reads all device states from the in-memory cache and writes a JSON snapshot to the state_logs table.
     """
     db = SessionLocal()
     try:
+        # We only log devices that are registered in the DB
         devices = db.query(Device).all()
         if not devices:
             return
 
-        snapshot = {device.id: device.state for device in devices}
+        # Get current states from our in-memory cache
+        # If a device isn't in cache yet, assume 0 or skip
+        snapshot = {d.id: device_states.get(d.id, 0) for d in devices}
+        
         entry = StateLog(
             logged_at=datetime.utcnow(),
             snapshot=json.dumps(snapshot),
@@ -120,11 +252,13 @@ scheduler.add_job(
 async def lifespan(app: FastAPI):
     # Startup: seed devices
     db = SessionLocal()
-    if db.query(Device).count() == 0:
-        initial_devices = ["r1/l1", "r1/l2", "r1/f1"]
-        db.add_all([Device(id=name, state=0) for name in initial_devices])
-        db.commit()
-    db.close()
+    try:
+        if db.query(Device).count() == 0:
+            initial_devices = ["r1/l1", "r1/l2", "r1/f1"]
+            db.add_all([Device(id=name) for name in initial_devices])
+            db.commit()
+    finally:
+        db.close()
 
     # Start the cron scheduler
     scheduler.start()
@@ -141,8 +275,8 @@ async def lifespan(app: FastAPI):
 # --- FastAPI App ---
 app = FastAPI(
     title="ESP Room Automation API",
-    description="Control lights and fans via MQTT and SQLite, with periodic state logging.",
-    version="1.2.0",
+    description="Control lights and fans via MQTT and SQLCipher, with periodic state logging and RBAC.",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -155,31 +289,93 @@ def get_db():
         db.close()
 
 
-# --- Existing Endpoints ---
+# --- Authentication Endpoints ---
 
-@app.get("/states", response_model=Dict[str, int], tags=["Monitoring"])
-def get_all_states(db: Session = Depends(get_db)):
-    """Returns a dictionary of all current device states."""
-    devices = db.query(Device).all()
-    return {device.id: device.state for device in devices}
+@app.post("/login", tags=["Auth"])
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    user = USERS_DB.get(form_data.username)
+    if not user or not pwd_context.verify(form_data.password, user["hashed_password"]):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user["username"]}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
 
+
+# --- Control Endpoints ---
 
 @app.post("/toggle/{device_id:path}", response_model=ToggleResponse, tags=["Control"])
-def toggle_device(device_id: str, db: Session = Depends(get_db)):
+def toggle_device(
+    device_id: str, 
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
     """
-    Toggles a specific device (e.g., 'r1/l1' or 'r2/f2').
-    Updates SQLite and publishes the new state to the matching MQTT topic.
+    Toggles a specific device (e.g., 'r1/l1').
+    Uses the in-memory MQTT cache to determine current state.
     """
     device = db.query(Device).filter(Device.id == device_id).first()
     if not device:
         raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
 
-    new_state = 1 if device.state == 0 else 0
-    device.state = new_state
-    db.commit()
-
+    # Determine current state from cache, default to 0
+    current_state = device_states.get(device_id, 0)
+    new_state = 1 if current_state == 0 else 0
+    
+    # Update cache immediately (optimistic update)
+    device_states[device_id] = new_state
+    
+    # Publish to MQTT with retain=True so it survives restarts
     mqtt_client.publish(device_id, str(new_state), qos=1, retain=True)
+    
     return {"id": device_id, "new_state": new_state}
+
+
+@app.post("/toggle-all", tags=["Control"])
+def toggle_all(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_admin)
+):
+    """
+    Toggles all registered devices. Admin only.
+    """
+    devices = db.query(Device).all()
+    if not devices:
+        return {"message": "No devices to toggle"}
+
+    # We toggle based on the majority state or just flip everything
+    # For simplicity, we'll turn everything ON if any are OFF, else turn everything OFF
+    any_off = any(device_states.get(d.id, 0) == 0 for d in devices)
+    target_state = 1 if any_off else 0
+    
+    for device in devices:
+        device_states[device.id] = target_state
+        mqtt_client.publish(device.id, str(target_state), qos=1, retain=True)
+
+    return {
+        "message": f"All devices set to {target_state}",
+        "count": len(devices),
+        "new_state": target_state
+    }
+
+
+# --- Monitoring Endpoints ---
+
+@app.get("/states", response_model=Dict[str, int], tags=["Monitoring"])
+def get_all_states(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Returns the current cached states of all devices."""
+    # We only return states for devices registered in the DB
+    devices = db.query(Device).all()
+    return {d.id: device_states.get(d.id, 0) for d in devices}
 
 
 # --- New Logging Endpoints ---
@@ -188,6 +384,7 @@ def toggle_device(device_id: str, db: Session = Depends(get_db)):
 def get_state_logs(
     limit: int = Query(default=50, le=500, description="Max entries to return"),
     db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Returns the most recent periodic state snapshots, newest first.
@@ -206,7 +403,10 @@ def get_state_logs(
 
 
 @app.post("/logs/trigger", tags=["Monitoring"])
-def trigger_log_now(db: Session = Depends(get_db)):
+def trigger_log_now(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
     """
     Manually triggers an immediate state snapshot outside the normal schedule.
     Useful for testing or capturing state on demand.
