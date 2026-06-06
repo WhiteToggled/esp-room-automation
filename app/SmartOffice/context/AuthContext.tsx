@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import apiClient from '../api/client';
+import { TOKEN_KEY } from '../constants/apiConfig';
 
 export interface AppUser {
   id: string;
@@ -31,6 +33,7 @@ const ADMIN: AppUser = {
 
 const USERS_KEY = 'smartoffice_users';
 const SESSION_KEY = 'smartoffice_session';
+const TOKEN_STORAGE_KEY = TOKEN_KEY;
 
 const AuthContext = createContext<AuthContextValue>({
   user: null,
@@ -75,28 +78,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    const list = await loadUsers();
-    setUsers(list);
-
-    let found: AppUser | null = null;
-    if (
-      ADMIN.email.toLowerCase() === email.toLowerCase() &&
-      ADMIN.password === password
-    ) {
-      found = ADMIN;
-    } else {
-      found = list.find(
-        (u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password
-      ) ?? null;
+    // Attempt backend login. Use the email local-part as username.
+    const username = email.includes('@') ? email.split('@')[0] : email;
+    try {
+      const resp = await apiClient.postForm('/login', { username, password });
+      const token = resp.access_token;
+      const role = resp.role ?? 'user';
+      await AsyncStorage.setItem(TOKEN_STORAGE_KEY, token);
+      await AsyncStorage.setItem(SESSION_KEY, username);
+      const userObj: AppUser = {
+        id: username,
+        name: username,
+        email: email.toLowerCase(),
+        password: '',
+        role: role === 'admin' ? 'admin' : 'user',
+        assignedCabinId: null,
+      };
+      setUsers((prev) => {
+        // keep local users list but ensure this user is present
+        const exists = prev.some((u) => u.id === username);
+        return exists ? prev : [...prev, userObj];
+      });
+      setUser(userObj);
+      return true;
+    } catch (e) {
+      return false;
     }
-    if (!found) return false;
-    await AsyncStorage.setItem(SESSION_KEY, found.id);
-    setUser(found);
-    return true;
   };
 
   const logout = async () => {
     await AsyncStorage.removeItem(SESSION_KEY);
+    await AsyncStorage.removeItem(TOKEN_STORAGE_KEY);
     setUser(null);
   };
 
@@ -105,26 +117,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     email: string,
     password: string
   ): Promise<{ success: boolean; error?: string }> => {
-    const list = await loadUsers();
-    const emailTaken =
-      email.toLowerCase() === ADMIN.email.toLowerCase() ||
-      list.some((u) => u.email.toLowerCase() === email.toLowerCase());
-    if (emailTaken) return { success: false, error: 'Email is already registered.' };
-
-    const newUser: AppUser = {
-      id: `user-${Date.now()}`,
-      name: name.trim(),
-      email: email.trim().toLowerCase(),
-      password,
-      role: 'user',
-      assignedCabinId: null,
-    };
-    const updated = [...list, newUser];
-    await saveUsers(updated);
-    setUsers(updated);
-    await AsyncStorage.setItem(SESSION_KEY, newUser.id);
-    setUser(newUser);
-    return { success: true };
+    // Persist signup to backend. Use email local-part as username.
+    const username = email.includes('@') ? email.split('@')[0] : email;
+    try {
+      const resp = await apiClient.postForm('/signup', { username, password });
+      const token = resp.access_token;
+      await AsyncStorage.setItem(TOKEN_STORAGE_KEY, token);
+      await AsyncStorage.setItem(SESSION_KEY, username);
+      const newUser: AppUser = {
+        id: username,
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        password: '',
+        role: 'user',
+        assignedCabinId: null,
+      };
+      const list = await loadUsers();
+      const updated = [...list, newUser];
+      await saveUsers(updated);
+      setUsers(updated);
+      setUser(newUser);
+      return { success: true };
+    } catch (err: any) {
+      try {
+        const json = await err.json();
+        return { success: false, error: json.detail || 'Sign up failed.' };
+      } catch (_) {
+        return { success: false, error: 'Sign up failed.' };
+      }
+    }
   };
 
   const assignCabin = async (userId: string, cabinId: string | null): Promise<void> => {

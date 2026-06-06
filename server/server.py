@@ -1,13 +1,24 @@
 import os
 import json
+import re
+import sqlite3
+from contextlib import asynccontextmanager
 from typing import List, Dict, Optional
 from datetime import datetime, timedelta
+from fastapi import FastAPI, Depends, HTTPException, Query, status
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from pydantic import BaseModel
+from sqlalchemy import create_engine, Column, String, Integer, DateTime, Text
+from sqlalchemy.orm import sessionmaker, Session, declarative_base
+import paho.mqtt.client as mqtt
+from apscheduler.schedulers.background import BackgroundScheduler
+import jwt
+from passlib.context import CryptContext
 
 # Monkeypatch SQLAlchemy's SQLite dialect for pysqlcipher3 compatibility
 import sqlalchemy.dialects.sqlite.pysqlite as pysqlite
 import sqlalchemy.dialects.sqlite.pysqlcipher as pysqlcipher
 from sqlalchemy.dialects.sqlite.pysqlite import SQLiteDialect_pysqlite
-import re
 
 def _custom_regexp(pattern, item):
     if item is None:
@@ -38,17 +49,6 @@ def patched_on_connect(self):
     return patched_set_regexp
 
 SQLiteDialect_pysqlite.on_connect = patched_on_connect
-
-from fastapi import FastAPI, Depends, HTTPException, Query, status
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from pydantic import BaseModel
-from sqlalchemy import create_engine, Column, String, Integer, DateTime, Text
-from contextlib import asynccontextmanager
-from sqlalchemy.orm import sessionmaker, Session, declarative_base
-import paho.mqtt.client as mqtt
-from apscheduler.schedulers.background import BackgroundScheduler
-import jwt
-from passlib.context import CryptContext
 
 # --- Configuration ---
 # Use SQLCipher with a passphrase
@@ -84,6 +84,54 @@ USERS_DB = {
         "role": "owner",
     },
 }
+
+# --- Persistent users DB (lightweight) ---
+USERS_DB_PATH = os.path.join(os.path.dirname(__file__), "users.db")
+
+
+def init_users_db():
+    con = sqlite3.connect(USERS_DB_PATH)
+    try:
+        cur = con.cursor()
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'user'
+            )
+            """
+        )
+        con.commit()
+    finally:
+        con.close()
+
+
+def get_persisted_user(username: str) -> Optional[Dict]:
+    con = sqlite3.connect(USERS_DB_PATH)
+    try:
+        cur = con.cursor()
+        cur.execute("SELECT username, password_hash, role FROM users WHERE username = ?", (username,))
+        row = cur.fetchone()
+        if not row:
+            return None
+        return {"username": row[0], "hashed_password": row[1], "role": row[2]}
+    finally:
+        con.close()
+
+
+def persist_user(username: str, password_hash: str, role: str = "user") -> None:
+    con = sqlite3.connect(USERS_DB_PATH)
+    try:
+        cur = con.cursor()
+        cur.execute(
+            "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+            (username, password_hash, role),
+        )
+        con.commit()
+    finally:
+        con.close()
 
 # --- Database Setup ---
 # SQLCipher requires a specific engine setup
@@ -151,7 +199,13 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
             raise credentials_exception
     except jwt.PyJWTError:
         raise credentials_exception
+    # First check in-memory hardcoded users
     user = USERS_DB.get(username)
+    if user is None:
+        # Then check persisted users DB
+        persisted = get_persisted_user(username)
+        if persisted:
+            user = persisted
     if user is None:
         raise credentials_exception
     return user
@@ -253,12 +307,21 @@ async def lifespan(app: FastAPI):
     # Startup: seed devices
     db = SessionLocal()
     try:
-        if db.query(Device).count() == 0:
-            initial_devices = ["r1/l1", "r1/l2", "r1/f1"]
-            db.add_all([Device(id=name) for name in initial_devices])
+        initial_devices = [
+            f"r{room}/l1" for room in range(1, 9)
+        ] + [
+            f"r{room}/f1" for room in range(1, 9)
+        ]
+        existing_ids = {row[0] for row in db.query(Device.id).all()}
+        missing_devices = [Device(id=name) for name in initial_devices if name not in existing_ids]
+        if missing_devices:
+            db.add_all(missing_devices)
             db.commit()
     finally:
         db.close()
+
+    # Ensure persisted users DB exists
+    init_users_db()
 
     # Start the cron scheduler
     scheduler.start()
@@ -293,7 +356,12 @@ def get_db():
 
 @app.post("/login", tags=["Auth"])
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    # Try hardcoded users first
     user = USERS_DB.get(form_data.username)
+    if not user:
+        # Try persisted users
+        user = get_persisted_user(form_data.username)
+
     if not user or not pwd_context.verify(form_data.password, user["hashed_password"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -305,7 +373,47 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     access_token = create_access_token(
         data={"sub": user["username"]}, expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    # Include role and username to help clients set UI state without extra calls
+    return {"access_token": access_token, "token_type": "bearer", "username": user["username"], "role": user.get("role", "user")}
+
+
+
+@app.post("/signup", tags=["Auth"])
+def signup(username: str, password: str):
+    """
+    Registers a new user and returns a JWT on success.
+    """
+    uname = username.strip()
+    if len(uname) < 3:
+        raise HTTPException(status_code=400, detail="Username too short")
+    if len(password) < 4:
+        raise HTTPException(status_code=400, detail="Password too short")
+
+    # Check conflicts with hardcoded users
+    if uname in USERS_DB:
+        raise HTTPException(status_code=400, detail="Username already exists")
+
+    # Check persisted DB
+    if get_persisted_user(uname) is not None:
+        raise HTTPException(status_code=400, detail="Username already exists")
+
+    hashed = pwd_context.hash(password)
+    try:
+        persist_user(uname, hashed, role="user")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not create user: {e}")
+
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": uname}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer", "username": uname, "role": "user"}
+
+
+@app.get('/me', tags=['Auth'])
+def me(current_user: dict = Depends(get_current_user)):
+    """Return basic info about the current user from the token."""
+    return {"username": current_user.get("username"), "role": current_user.get("role", "user")}
 
 
 # --- Control Endpoints ---
