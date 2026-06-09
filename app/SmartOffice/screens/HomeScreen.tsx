@@ -18,6 +18,7 @@ import Animated, {
 
 import { COLORS, SPACING, RADIUS } from '../constants/theme';
 import { Cabin, INITIAL_CABINS } from '../constants/cabinData';
+import * as devicesApi from '../api/devices';
 import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header';
 import CabinCard from '../components/CabinCard';
@@ -58,11 +59,25 @@ const HomeScreen: React.FC = () => {
   );
 
   const toggleLight = useCallback((cabinId: string) => {
+    // Optimistic UI update and backend toggle when a mapping exists
     setCabins((prev) =>
       prev.map((c) =>
         c.id === cabinId ? { ...c, light: { ...c.light, isOn: !c.light.isOn } } : c
       )
     );
+    const cabin = cabins.find((c) => c.id === cabinId);
+    const topic = cabin?.light.topic;
+    if (topic) {
+      devicesApi.toggle(topic).catch(async () => {
+        // On error, refresh states from server to reconcile
+        try {
+          const states = await devicesApi.getStates();
+          reconcileStates(states);
+        } catch (_) {
+          // ignore
+        }
+      });
+    }
   }, []);
 
   const toggleFan = useCallback((cabinId: string) => {
@@ -71,22 +86,37 @@ const HomeScreen: React.FC = () => {
         c.id === cabinId ? { ...c, fan: { ...c.fan, isOn: !c.fan.isOn } } : c
       )
     );
+    const cabin = cabins.find((c) => c.id === cabinId);
+    const topic = cabin?.fan.topic;
+    if (topic) {
+      devicesApi.toggle(topic).catch(async () => {
+        try {
+          const states = await devicesApi.getStates();
+          reconcileStates(states);
+        } catch (_) {}
+      });
+    }
   }, []);
 
   const allLightsOn = useCallback(() => {
     setCabins((prev) => prev.map((c) => ({ ...c, light: { ...c.light, isOn: true } })));
+    // Backend toggle-all should be called via MasterControl (admin) — but we attempt to reconcile
+    devicesApi.getStates().then(reconcileStates).catch(() => {});
   }, []);
 
   const allLightsOff = useCallback(() => {
     setCabins((prev) => prev.map((c) => ({ ...c, light: { ...c.light, isOn: false } })));
+    devicesApi.getStates().then(reconcileStates).catch(() => {});
   }, []);
 
   const allFansOn = useCallback(() => {
     setCabins((prev) => prev.map((c) => ({ ...c, fan: { ...c.fan, isOn: true } })));
+    devicesApi.getStates().then(reconcileStates).catch(() => {});
   }, []);
 
   const allFansOff = useCallback(() => {
     setCabins((prev) => prev.map((c) => ({ ...c, fan: { ...c.fan, isOn: false } })));
+    devicesApi.getStates().then(reconcileStates).catch(() => {});
   }, []);
 
   const allOff = useCallback(() => {
@@ -97,7 +127,31 @@ const HomeScreen: React.FC = () => {
         fan: { ...c.fan, isOn: false },
       }))
     );
+    devicesApi.getStates().then(reconcileStates).catch(() => {});
   }, []);
+
+  // Reconcile device states from backend -> update cabins where topics match
+  const reconcileStates = useCallback((states: Record<string, number>) => {
+    setCabins((prev) =>
+      prev.map((c) => ({
+        ...c,
+        light: { ...c.light, isOn: c.light.topic ? Boolean(states[c.light.topic]) : c.light.isOn },
+        fan: { ...c.fan, isOn: c.fan.topic ? Boolean(states[c.fan.topic]) : c.fan.isOn },
+      }))
+    );
+  }, []);
+
+  // Fetch states on mount
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const states = await devicesApi.getStates();
+        if (mounted) reconcileStates(states as Record<string, number>);
+      } catch (_) {}
+    })();
+    return () => { mounted = false; };
+  }, [reconcileStates]);
 
   const activeDevices = visibleCabins.reduce(
     (acc, c) => acc + (c.light.isOn ? 1 : 0) + (c.fan.isOn ? 1 : 0),
