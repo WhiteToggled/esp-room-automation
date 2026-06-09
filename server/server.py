@@ -254,7 +254,7 @@ async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
         if db.query(Device).count() == 0:
-            initial_devices = ["r1/l1", "r1/l2", "r1/f1"]
+            initial_devices = ["r1/l1", "r1/l2", "r1/l3", "r1/l4", "r1/l5", "r1/l6", "r1/f1", "r1/f2"]
             db.add_all([Device(id=name) for name in initial_devices])
             db.commit()
     finally:

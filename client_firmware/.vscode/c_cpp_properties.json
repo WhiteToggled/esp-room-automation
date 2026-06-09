@@ -8,8 +8,10 @@
         {
             "name": "PlatformIO",
             "includePath": [
-                "/mnt/shared/UET/4-Spring2026/coal/esp-room-automation/include",
-                "/mnt/shared/UET/4-Spring2026/coal/esp-room-automation/src",
+                "/mnt/shared/UET/4-Spring2026/coal/esp-room-automation/client_firmware/include",
+                "/mnt/shared/UET/4-Spring2026/coal/esp-room-automation/client_firmware/src",
+                "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/WiFi/src",
+                "/mnt/shared/UET/4-Spring2026/coal/esp-room-automation/client_firmware/.pio/libdeps/esp32dev/PubSubClient/src",
                 "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/newlib/platform_include",
                 "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/freertos/include",
                 "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/freertos/include/esp_additions/freertos",
@@ -235,7 +237,6 @@
                 "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/USB/src",
                 "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/Update/src",
                 "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/WebServer/src",
-                "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/WiFi/src",
                 "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/WiFiClientSecure/src",
                 "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/WiFiProv/src",
                 "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/Wire/src",
@@ -244,8 +245,10 @@
             "browse": {
                 "limitSymbolsToIncludedHeaders": true,
                 "path": [
-                    "/mnt/shared/UET/4-Spring2026/coal/esp-room-automation/include",
-                    "/mnt/shared/UET/4-Spring2026/coal/esp-room-automation/src",
+                    "/mnt/shared/UET/4-Spring2026/coal/esp-room-automation/client_firmware/include",
+                    "/mnt/shared/UET/4-Spring2026/coal/esp-room-automation/client_firmware/src",
+                    "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/WiFi/src",
+                    "/mnt/shared/UET/4-Spring2026/coal/esp-room-automation/client_firmware/.pio/libdeps/esp32dev/PubSubClient/src",
                     "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/newlib/platform_include",
                     "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/freertos/include",
                     "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/freertos/include/esp_additions/freertos",
@@ -471,7 +474,6 @@
                     "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/USB/src",
                     "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/Update/src",
                     "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/WebServer/src",
-                    "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/WiFi/src",
                     "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/WiFiClientSecure/src",
                     "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/WiFiProv/src",
                     "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/Wire/src",

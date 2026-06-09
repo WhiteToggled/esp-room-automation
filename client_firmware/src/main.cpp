@@ -19,15 +19,30 @@ void callback(char* topic, byte* payload, unsigned int length) {
     Serial.println(message);
 
     int state = message.toInt();
-    if (strcmp(topic, TOPIC_LIGHT_1) == 0) {
-        digitalWrite(PIN_LIGHT_1, state);
+    if (strcmp(topic, TOPIC_INPUT_1) == 0) {
+        digitalWrite(PIN_INPUT_1, state);
     } 
-    else if (strcmp(topic, TOPIC_LIGHT_2) == 0) {
-        digitalWrite(PIN_LIGHT_2, state);
+    else if (strcmp(topic, TOPIC_INPUT_2) == 0) {
+        digitalWrite(PIN_INPUT_2, state);
     } 
-    else if (strcmp(topic, TOPIC_FAN_1) == 0) {
-        digitalWrite(PIN_FAN_1, state);
-    }
+    else if (strcmp(topic, TOPIC_INPUT_3) == 0) {
+        digitalWrite(PIN_INPUT_3, state);
+    } 
+    else if (strcmp(topic, TOPIC_INPUT_4) == 0) {
+        digitalWrite(PIN_INPUT_4, state);
+    } 
+    else if (strcmp(topic, TOPIC_INPUT_5) == 0) {
+        digitalWrite(PIN_INPUT_5, state);
+    } 
+    else if (strcmp(topic, TOPIC_INPUT_6) == 0) {
+        digitalWrite(PIN_INPUT_6, state);
+    } 
+    else if (strcmp(topic, TOPIC_INPUT_7) == 0) {
+        digitalWrite(PIN_INPUT_7, state);
+    } 
+    else if (strcmp(topic, TOPIC_INPUT_8) == 0) {
+        digitalWrite(PIN_INPUT_8, state);
+    } 
 }
 
 void reconnect() {
@@ -52,9 +67,15 @@ void reconnect() {
 void setup() {
   Serial.begin(115200);
 
-  pinMode(PIN_LIGHT_1, OUTPUT);
-  // pinMode(PIN_LIGHT_2, OUTPUT);
-  // pinMode(PIN_FAN_1, OUTPUT);
+  pinMode(PIN_INPUT_1, OUTPUT);
+  pinMode(PIN_INPUT_2, OUTPUT);
+  pinMode(PIN_INPUT_3, OUTPUT);
+  pinMode(PIN_INPUT_4, OUTPUT);
+  pinMode(PIN_INPUT_5, OUTPUT);
+  pinMode(PIN_INPUT_6, OUTPUT);
+  pinMode(PIN_INPUT_7, OUTPUT);
+  pinMode(PIN_INPUT_8, OUTPUT);
+
 
   connect_to_wifi();
 
