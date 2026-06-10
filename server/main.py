@@ -11,14 +11,21 @@ from users_db import init_users_db
 
 INITIAL_DEVICES = [
     "r1/l1",
-    "r1/l2",
-    "r1/l3",
-    "r1/l4",
-    "r1/l5",
-    "r1/l6",
-    "r1/f1",
-    "r1/f2",
     "r2/l1",
+    "r3/l1",
+    "r4/l1",
+    "r5/l1",
+    "r6/l1",
+    "r7/l1",
+    "r8/l1",
+    "r1/f1",
+    "r2/f1",
+    "r3/f1",
+    "r4/f1",
+    "r5/f1",
+    "r6/f1",
+    "r7/f1",
+    "r8/f1",
 ]
 
 
