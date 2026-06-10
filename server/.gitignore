@@ -30,3 +30,6 @@ archive.zip
 .DS_Store
 
 .codspeed
+
+# Environment variables
+.env

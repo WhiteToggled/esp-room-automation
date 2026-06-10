@@ -3,9 +3,10 @@ services:
     build: .
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
       - MQTT_BROKER=mqtt-broker
-      - MQTT_PORT=1883
     depends_on:
       - mqtt-broker
     volumes:
