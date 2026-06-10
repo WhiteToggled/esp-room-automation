@@ -3,7 +3,7 @@ import { View, TouchableOpacity, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, RADIUS, SPACING } from '../constants/theme';
 
-export type TabName = 'home' | 'users';
+export type TabName = 'home' | 'users' | 'analytics';
 
 interface BottomNavProps {
   activeTab: TabName;
@@ -12,6 +12,7 @@ interface BottomNavProps {
 
 const ADMIN_TABS: { name: TabName; icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
   { name: 'home', icon: 'home-outline', label: 'Home' },
+  { name: 'analytics', icon: 'bar-chart-outline', label: 'Analytics' },
   { name: 'users', icon: 'people-outline', label: 'Users' },
 ];
 

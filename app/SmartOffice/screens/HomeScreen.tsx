@@ -25,6 +25,7 @@ import CabinCard from '../components/CabinCard';
 import BottomNav, { TabName } from '../components/BottomNav';
 import MasterControl from '../components/MasterControl';
 import AdminUsersScreen from './AdminUsersScreen';
+import AnalyticsScreen from './AnalyticsScreen';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const NUM_COLUMNS = 2;
@@ -38,19 +39,27 @@ const HomeScreen: React.FC = () => {
 
   const isAdmin = user?.role === 'admin';
 
-  // 0 = home visible, 1 = users visible
+  // 0 = home visible, 1 = analytics, 2 = users
   const offset = useSharedValue(0);
+  const TAB_INDEX = useMemo<Record<TabName, number>>(
+    () => ({ home: 0, analytics: 1, users: 2 }),
+    []
+  );
 
   useEffect(() => {
-    offset.value = withTiming(activeTab === 'users' ? 1 : 0, TIMING);
-  }, [activeTab]);
+    offset.value = withTiming(TAB_INDEX[activeTab], TIMING);
+  }, [activeTab, TAB_INDEX, offset]);
 
   const homeAnimStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: offset.value * -SCREEN_WIDTH }],
   }));
 
-  const usersAnimStyle = useAnimatedStyle(() => ({
+  const analyticsAnimStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: (1 - offset.value) * SCREEN_WIDTH }],
+  }));
+
+  const usersAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: (2 - offset.value) * SCREEN_WIDTH }],
   }));
 
   const visibleCabins = useMemo(
@@ -240,6 +249,16 @@ const HomeScreen: React.FC = () => {
             pointerEvents={activeTab === 'users' ? 'auto' : 'none'}
           >
             <AdminUsersScreen />
+          </Animated.View>
+        )}
+
+        {/* Analytics tab (admin only) */}
+        {isAdmin && (
+          <Animated.View
+            style={[StyleSheet.absoluteFill, analyticsAnimStyle]}
+            pointerEvents={activeTab === 'analytics' ? 'auto' : 'none'}
+          >
+            <AnalyticsScreen />
           </Animated.View>
         )}
       </View>
