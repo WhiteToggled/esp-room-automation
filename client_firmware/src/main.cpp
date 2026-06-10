@@ -3,6 +3,8 @@
 
 #include "config.h"
 #include "wifi.h"
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -19,6 +21,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
     Serial.println(message);
 
     int state = message.toInt();
+    state = !state;
     if (strcmp(topic, TOPIC_INPUT_1) == 0) {
         digitalWrite(PIN_INPUT_1, state);
     } 
@@ -75,7 +78,9 @@ void setup() {
   pinMode(PIN_INPUT_6, OUTPUT);
   pinMode(PIN_INPUT_7, OUTPUT);
   pinMode(PIN_INPUT_8, OUTPUT);
+    WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);  // disable brownout
 
+  pinMode(2, OUTPUT);
 
   connect_to_wifi();
 

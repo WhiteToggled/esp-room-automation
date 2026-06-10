@@ -8,11 +8,16 @@ void connect_to_wifi() {
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     
     while(WiFi.status() != WL_CONNECTED) {
-        delay(500);
+    digitalWrite(2, HIGH);
+    delay(250);
+    digitalWrite(2, LOW);
+    delay(250);
+        // delay(500);
         Serial.print(".");
     }
 
     Serial.println("");
     Serial.print("Conncted to wifi! Assigned IP Address : ");
+    digitalWrite(2, LOW);
     Serial.println(WiFi.localIP());
 }
