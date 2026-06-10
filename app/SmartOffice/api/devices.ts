@@ -39,8 +39,8 @@ export async function allOff() {
   return client.post('/all/off', {});
 }
 
-export async function getLogs() {
-  return client.get('/logs');
+export async function getLogs(limit = 500) {
+  return client.get('/logs?limit=' + limit);
 }
 
 export async function triggerLog() {

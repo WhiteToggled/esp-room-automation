@@ -9,13 +9,17 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { getLogs } from '../api/devices';
+import { getLogs, triggerLog } from '../api/devices';
 import { COLORS, FONTS, RADIUS, SPACING } from '../constants/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CHART_WIDTH = SCREEN_WIDTH - SPACING.lg * 2 - SPACING.xxl * 2;
-const CHART_HEIGHT = 110;
+const CHART_HEIGHT = 120;
 const BAR_MIN_H = 3;
+
+type Range = '1d' | '7d' | '30d';
+const RANGE_LABELS: Record<Range, string> = { '1d': '1 Day', '7d': 'Week', '30d': '30 Days' };
+const RANGE_HOURS: Record<Range, number> = { '1d': 24, '7d': 168, '30d': 720 };
 
 interface LogEntry {
   id: number;
@@ -77,51 +81,93 @@ function computeStats(logs: LogEntry[]): DeviceStat[] {
     .sort((a, b) => b.uptimePct - a.uptimePct);
 }
 
-function activeDevicesOverTime(logs: LogEntry[]): { label: string; value: number }[] {
-  return [...logs]
-    .sort((a, b) => a.logged_at.localeCompare(b.logged_at))
-    .slice(-24)
-    .map((log) => ({
-      label: parseDate(log.logged_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      value: Object.values(log.snapshot).filter(Boolean).length,
-    }));
+function activeDevicesOverTime(
+  logs: LogEntry[],
+  range: Range
+): { label: string; value: number }[] {
+  const cutoff = Date.now() - RANGE_HOURS[range] * 3600 * 1000;
+  const filtered = [...logs]
+    .filter((l) => parseDate(l.logged_at).getTime() >= cutoff)
+    .sort((a, b) => a.logged_at.localeCompare(b.logged_at));
+
+  if (!filtered.length) return [];
+
+  // Bucket into ~24 evenly-spaced points for readability
+  const bucketCount = Math.min(filtered.length, 24);
+  const step = Math.max(1, Math.floor(filtered.length / bucketCount));
+  const sampled = filtered.filter((_, i) => i % step === 0);
+
+  const fmt: Intl.DateTimeFormatOptions =
+    range === '1d'
+      ? { hour: '2-digit', minute: '2-digit' }
+      : range === '7d'
+      ? { weekday: 'short', hour: '2-digit' }
+      : { month: 'short', day: 'numeric' };
+
+  return sampled.map((log) => ({
+    label: parseDate(log.logged_at).toLocaleString([], fmt),
+    value: Object.values(log.snapshot).filter(Boolean).length,
+  }));
 }
 
 // ── Sparkline bar chart ──────────────────────────────────────────────────────
 
-function BarChart({ data }: { data: { label: string; value: number }[] }) {
+const Y_TICKS = 4;
+
+function BarChart({ data, maxDevices }: { data: { label: string; value: number }[]; maxDevices: number }) {
   if (!data.length) return null;
-  const max = Math.max(...data.map((d) => d.value), 1);
-  const barW = Math.max(4, (CHART_WIDTH / data.length) - 3);
+  const max = Math.max(...data.map((d) => d.value), maxDevices, 1);
+  const Y_LABEL_W = 24;
+  const chartW = CHART_WIDTH - Y_LABEL_W;
+  const barW = Math.max(4, (chartW / data.length) - 3);
 
   return (
-    <View style={{ height: CHART_HEIGHT + 18 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: CHART_HEIGHT, gap: 3 }}>
-        {data.map((d, i) => {
-          const h = Math.max(BAR_MIN_H, (d.value / max) * CHART_HEIGHT);
-          const opacity = 0.45 + 0.55 * (d.value / max);
+    <View style={{ flexDirection: 'row' }}>
+      {/* Y-axis labels */}
+      <View style={{ width: Y_LABEL_W, height: CHART_HEIGHT, justifyContent: 'space-between', alignItems: 'flex-end', paddingRight: 4 }}>
+        {Array.from({ length: Y_TICKS + 1 }, (_, i) => {
+          const val = Math.round((max * (Y_TICKS - i)) / Y_TICKS);
           return (
-            <View
-              key={i}
-              style={{
-                width: barW,
-                height: h,
-                borderRadius: 3,
-                backgroundColor: COLORS.accent,
-                opacity,
-              }}
-            />
+            <Text key={i} style={styles.axisLabel}>{val}</Text>
           );
         })}
       </View>
-      {/* x-axis: first, middle, last labels */}
-      {data.length > 1 && (
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-          <Text style={styles.axisLabel}>{data[0].label}</Text>
-          <Text style={styles.axisLabel}>{data[Math.floor(data.length / 2)].label}</Text>
-          <Text style={styles.axisLabel}>{data[data.length - 1].label}</Text>
+      {/* Bars + x-axis */}
+      <View style={{ flex: 1 }}>
+        {/* Gridlines */}
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: CHART_HEIGHT }}>
+          {Array.from({ length: Y_TICKS + 1 }, (_, i) => (
+            <View
+              key={i}
+              style={{
+                position: 'absolute',
+                top: Math.round((i / Y_TICKS) * CHART_HEIGHT),
+                left: 0, right: 0, height: 1,
+                backgroundColor: i === Y_TICKS ? COLORS.glassBorder : 'rgba(255,255,255,0.06)',
+              }}
+            />
+          ))}
         </View>
-      )}
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: CHART_HEIGHT, gap: 3 }}>
+          {data.map((d, i) => {
+            const h = Math.max(BAR_MIN_H, (d.value / max) * CHART_HEIGHT);
+            const opacity = 0.45 + 0.55 * (d.value / max);
+            return (
+              <View
+                key={i}
+                style={{ width: barW, height: h, borderRadius: 3, backgroundColor: COLORS.accent, opacity }}
+              />
+            );
+          })}
+        </View>
+        {data.length > 1 && (
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+            <Text style={styles.axisLabel}>{data[0].label}</Text>
+            <Text style={styles.axisLabel}>{data[Math.floor(data.length / 2)].label}</Text>
+            <Text style={styles.axisLabel}>{data[data.length - 1].label}</Text>
+          </View>
+        )}
+      </View>
     </View>
   );
 }
@@ -175,13 +221,14 @@ export default function AnalyticsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [range, setRange] = useState<Range>('1d');
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchLogs = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     setError(null);
     try {
-      const data: LogEntry[] = await getLogs();
+      const data: LogEntry[] = await getLogs(500);
       setLogs(data);
     } catch {
       setError('Failed to load logs. Check your connection.');
@@ -193,14 +240,19 @@ export default function AnalyticsScreen() {
 
   useEffect(() => {
     fetchLogs();
+    // Capture a fresh snapshot so "last seen" reflects current state
+    triggerLog().catch(() => {});
     pollRef.current = setInterval(() => fetchLogs(true), 30_000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [fetchLogs]);
 
   const onRefresh = () => { setRefreshing(true); fetchLogs(); };
 
-  const chartData = activeDevicesOverTime(logs);
+  const chartData = activeDevicesOverTime(logs, range);
   const stats = computeStats(logs);
+  const totalDeviceCount = logs.length
+    ? Object.keys(logs[logs.length - 1].snapshot).length
+    : 0;
 
   // Group stats by room
   const byRoom: Record<string, DeviceStat[]> = {};
@@ -247,12 +299,34 @@ export default function AnalyticsScreen() {
           {/* Active devices over time */}
           {chartData.length > 1 && (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Active devices over time</Text>
-              <Text style={styles.cardSubtitle}>Last {chartData.length} snapshots</Text>
-              <View style={{ marginTop: SPACING.md }}>
-                <BarChart data={chartData} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View>
+                <Text style={styles.cardTitle}>Active devices over time</Text>
+                <Text style={styles.cardSubtitle}>
+                  {chartData.length} snapshots · y = devices on
+                </Text>
               </View>
+              <View style={styles.rangeRow}>
+                {(['1d', '7d', '30d'] as Range[]).map((r) => (
+                  <TouchableOpacity
+                    key={r}
+                    onPress={() => setRange(r)}
+                    style={[styles.rangeBtn, range === r && styles.rangeBtnActive]}
+                  >
+                    <Text style={[styles.rangeBtnText, range === r && styles.rangeBtnTextActive]}>
+                      {RANGE_LABELS[r]}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+             </View>
+            <View style={{ marginTop: SPACING.md }}>
+              {chartData.length > 1
+                ? <BarChart data={chartData} maxDevices={totalDeviceCount} />
+                : <Text style={styles.emptySubText}>No snapshots in this range.</Text>
+              }
             </View>
+          </View>
           )}
 
           {/* Per-room device stats */}
@@ -478,5 +552,29 @@ const styles = StyleSheet.create({
     fontSize: 11,
     textAlign: 'center',
     marginTop: SPACING.sm,
+  },
+  // Range selector
+  rangeRow: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  rangeBtn: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 5,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: COLORS.glassBorder,
+  },
+  rangeBtnActive: {
+    backgroundColor: COLORS.accent,
+    borderColor: COLORS.accent,
+  },
+  rangeBtnText: {
+    color: COLORS.textMuted,
+    fontSize: 11,
+    fontWeight: FONTS.medium,
+  },
+  rangeBtnTextActive: {
+    color: COLORS.text,
   },
 });

@@ -36,8 +36,8 @@ const NUM_COLUMNS = 2;
 const TIMING = { duration: 280, easing: Easing.out(Easing.cubic) };
 
 // Tab order: Home=0, Schedules=1, Users=2, Settings=3
-const ADMIN_OFFSETS: Record<TabName, number> = { home: 0, schedules: 1, users: 2, settings: 3 };
-const USER_OFFSETS:  Record<TabName, number> = { home: 0, schedules: 1, users: 0, settings: 0 };
+const ADMIN_OFFSETS: Record<TabName, number> = { home: 0, schedules: 1, analytics: 2, users: 3, settings: 4 };
+const USER_OFFSETS:  Record<TabName, number> = { home: 0, schedules: 1, analytics: 0, users: 0, settings: 0 };
 const tabOffset = (tab: TabName, isAdmin: boolean): number =>
   (isAdmin ? ADMIN_OFFSETS : USER_OFFSETS)[tab];
 
@@ -51,7 +51,7 @@ const HomeScreen: React.FC = () => {
 
   // Ordered list of tabs visible to this user — used for swipe navigation
   const visibleTabs: TabName[] = isAdmin
-    ? ['home', 'schedules', 'users', 'settings']
+    ? ['home', 'schedules', 'analytics', 'users', 'settings']
     : ['home', 'schedules'];
 
   const handleSwipe = useCallback((translationX: number) => {
@@ -79,14 +79,10 @@ const HomeScreen: React.FC = () => {
 
   // offset drives all slide animations
   const offset = useSharedValue(0);
-  const TAB_INDEX = useMemo<Record<TabName, number>>(
-    () => ({ home: 0, analytics: 1, users: 2 }),
-    []
-  );
 
   useEffect(() => {
     offset.value = withTiming(tabOffset(activeTab, isAdmin), TIMING);
-  }, [activeTab, isAdmin]);
+  }, [activeTab, isAdmin, offset]);
 
   // Home is always at position 0 — slides left as offset increases
   const homeAnimStyle = useAnimatedStyle(() => ({
@@ -98,14 +94,19 @@ const HomeScreen: React.FC = () => {
     transform: [{ translateX: (1 - offset.value) * SCREEN_WIDTH }],
   }));
 
-  // Users: position 2 (admin only)
-  const usersAnimStyle = useAnimatedStyle(() => ({
+  // Analytics: position 2 (admin only)
+  const analyticsAnimStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: (2 - offset.value) * SCREEN_WIDTH }],
   }));
 
-  // Settings: always position 3 (admin only)
-  const settingsAnimStyle = useAnimatedStyle(() => ({
+  // Users: position 3 (admin only)
+  const usersAnimStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: (3 - offset.value) * SCREEN_WIDTH }],
+  }));
+
+  // Settings: always position 4 (admin only)
+  const settingsAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: (4 - offset.value) * SCREEN_WIDTH }],
   }));
 
   const visibleCabins = useMemo(
