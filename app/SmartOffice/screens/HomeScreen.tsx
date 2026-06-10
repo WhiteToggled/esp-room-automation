@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   FlatList,
   StatusBar,
   Dimensions,
+  PanResponder,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,6 +26,8 @@ import CabinCard from '../components/CabinCard';
 import BottomNav, { TabName } from '../components/BottomNav';
 import MasterControl from '../components/MasterControl';
 import AdminUsersScreen from './AdminUsersScreen';
+import SchedulesScreen from './SchedulesScreen';
+import SettingsScreen from './SettingsScreen';
 import AnalyticsScreen from './AnalyticsScreen';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -32,14 +35,49 @@ const NUM_COLUMNS = 2;
 
 const TIMING = { duration: 280, easing: Easing.out(Easing.cubic) };
 
+// Tab order: Home=0, Schedules=1, Users=2, Settings=3
+const ADMIN_OFFSETS: Record<TabName, number> = { home: 0, schedules: 1, users: 2, settings: 3 };
+const USER_OFFSETS:  Record<TabName, number> = { home: 0, schedules: 1, users: 0, settings: 0 };
+const tabOffset = (tab: TabName, isAdmin: boolean): number =>
+  (isAdmin ? ADMIN_OFFSETS : USER_OFFSETS)[tab];
+
 const HomeScreen: React.FC = () => {
   const { user, logout } = useAuth();
   const [cabins, setCabins] = useState<Cabin[]>(INITIAL_CABINS);
   const [activeTab, setActiveTab] = useState<TabName>('home');
 
   const isAdmin = user?.role === 'admin';
+  const [usersRefreshKey, setUsersRefreshKey] = useState(0);
 
-  // 0 = home visible, 1 = analytics, 2 = users
+  // Ordered list of tabs visible to this user — used for swipe navigation
+  const visibleTabs: TabName[] = isAdmin
+    ? ['home', 'schedules', 'users', 'settings']
+    : ['home', 'schedules'];
+
+  const handleSwipe = useCallback((translationX: number) => {
+    const idx = visibleTabs.indexOf(activeTab);
+    if (translationX < -60 && idx < visibleTabs.length - 1) {
+      setActiveTab(visibleTabs[idx + 1]);
+    } else if (translationX > 60 && idx > 0) {
+      setActiveTab(visibleTabs[idx - 1]);
+    }
+  }, [activeTab, visibleTabs]);
+
+  // Keep a ref so PanResponder (created once) always calls the latest handleSwipe
+  const handleSwipeRef = useRef(handleSwipe);
+  useEffect(() => { handleSwipeRef.current = handleSwipe; }, [handleSwipe]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      // Claim the gesture only when horizontal movement is clear and dominant
+      onMoveShouldSetPanResponder: (_, g) =>
+        Math.abs(g.dx) > Math.abs(g.dy) * 1.5 && Math.abs(g.dx) > 15,
+      onPanResponderRelease:   (_, g) => { handleSwipeRef.current(g.dx); },
+      onPanResponderTerminate: (_, g) => { handleSwipeRef.current(g.dx); },
+    })
+  ).current;
+
+  // offset drives all slide animations
   const offset = useSharedValue(0);
   const TAB_INDEX = useMemo<Record<TabName, number>>(
     () => ({ home: 0, analytics: 1, users: 2 }),
@@ -47,19 +85,27 @@ const HomeScreen: React.FC = () => {
   );
 
   useEffect(() => {
-    offset.value = withTiming(TAB_INDEX[activeTab], TIMING);
-  }, [activeTab, TAB_INDEX, offset]);
+    offset.value = withTiming(tabOffset(activeTab, isAdmin), TIMING);
+  }, [activeTab, isAdmin]);
 
+  // Home is always at position 0 — slides left as offset increases
   const homeAnimStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: offset.value * -SCREEN_WIDTH }],
   }));
 
-  const analyticsAnimStyle = useAnimatedStyle(() => ({
+  // Schedules: always position 1 (both admin and non-admin)
+  const schedulesAnimStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: (1 - offset.value) * SCREEN_WIDTH }],
   }));
 
+  // Users: position 2 (admin only)
   const usersAnimStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: (2 - offset.value) * SCREEN_WIDTH }],
+  }));
+
+  // Settings: always position 3 (admin only)
+  const settingsAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: (3 - offset.value) * SCREEN_WIDTH }],
   }));
 
   const visibleCabins = useMemo(
@@ -68,7 +114,6 @@ const HomeScreen: React.FC = () => {
   );
 
   const toggleLight = useCallback((cabinId: string) => {
-    // Optimistic UI update and backend toggle when a mapping exists
     setCabins((prev) =>
       prev.map((c) =>
         c.id === cabinId ? { ...c, light: { ...c.light, isOn: !c.light.isOn } } : c
@@ -78,16 +123,13 @@ const HomeScreen: React.FC = () => {
     const topic = cabin?.light.topic;
     if (topic) {
       devicesApi.toggle(topic).catch(async () => {
-        // On error, refresh states from server to reconcile
         try {
           const states = await devicesApi.getStates();
           reconcileStates(states);
-        } catch (_) {
-          // ignore
-        }
+        } catch (_) {}
       });
     }
-  }, []);
+  }, [cabins]);
 
   const toggleFan = useCallback((cabinId: string) => {
     setCabins((prev) =>
@@ -105,26 +147,15 @@ const HomeScreen: React.FC = () => {
         } catch (_) {}
       });
     }
-  }, []);
+  }, [cabins]);
 
   const allLightsOn = useCallback(() => {
     setCabins((prev) => prev.map((c) => ({ ...c, light: { ...c.light, isOn: true } })));
-    // Backend toggle-all should be called via MasterControl (admin) — but we attempt to reconcile
-    devicesApi.getStates().then(reconcileStates).catch(() => {});
-  }, []);
-
-  const allLightsOff = useCallback(() => {
-    setCabins((prev) => prev.map((c) => ({ ...c, light: { ...c.light, isOn: false } })));
     devicesApi.getStates().then(reconcileStates).catch(() => {});
   }, []);
 
   const allFansOn = useCallback(() => {
     setCabins((prev) => prev.map((c) => ({ ...c, fan: { ...c.fan, isOn: true } })));
-    devicesApi.getStates().then(reconcileStates).catch(() => {});
-  }, []);
-
-  const allFansOff = useCallback(() => {
-    setCabins((prev) => prev.map((c) => ({ ...c, fan: { ...c.fan, isOn: false } })));
     devicesApi.getStates().then(reconcileStates).catch(() => {});
   }, []);
 
@@ -139,7 +170,6 @@ const HomeScreen: React.FC = () => {
     devicesApi.getStates().then(reconcileStates).catch(() => {});
   }, []);
 
-  // Reconcile device states from backend -> update cabins where topics match
   const reconcileStates = useCallback((states: Record<string, number>) => {
     setCabins((prev) =>
       prev.map((c) => ({
@@ -150,7 +180,6 @@ const HomeScreen: React.FC = () => {
     );
   }, []);
 
-  // Fetch states on mount
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -185,8 +214,8 @@ const HomeScreen: React.FC = () => {
       <View style={styles.glowTopLeft} />
       <View style={styles.glowBottomRight} />
 
-      {/* Sliding content area */}
-      <View style={styles.pages}>
+      {/* Sliding pages with swipe-left/right navigation */}
+      <View style={styles.pages} {...panResponder.panHandlers}>
 
         {/* Home tab */}
         <Animated.View
@@ -230,9 +259,7 @@ const HomeScreen: React.FC = () => {
                   isAdmin ? (
                     <MasterControl
                       onAllLightsOn={allLightsOn}
-                      onAllLightsOff={allLightsOff}
                       onAllFansOn={allFansOn}
-                      onAllFansOff={allFansOff}
                       onAllOff={allOff}
                     />
                   ) : null
@@ -242,13 +269,34 @@ const HomeScreen: React.FC = () => {
           </SafeAreaView>
         </Animated.View>
 
+        {/* Schedules tab (all users) */}
+        <Animated.View
+          style={[StyleSheet.absoluteFill, schedulesAnimStyle]}
+          pointerEvents={activeTab === 'schedules' ? 'auto' : 'none'}
+        >
+          <SchedulesScreen />
+        </Animated.View>
+
         {/* Users tab (admin only) */}
         {isAdmin && (
           <Animated.View
             style={[StyleSheet.absoluteFill, usersAnimStyle]}
             pointerEvents={activeTab === 'users' ? 'auto' : 'none'}
           >
-            <AdminUsersScreen />
+            <AdminUsersScreen refreshKey={usersRefreshKey} />
+          </Animated.View>
+        )}
+
+        {/* Settings tab (admin only) */}
+        {isAdmin && (
+          <Animated.View
+            style={[StyleSheet.absoluteFill, settingsAnimStyle]}
+            pointerEvents={activeTab === 'settings' ? 'auto' : 'none'}
+          >
+            <SettingsScreen
+              isActive={activeTab === 'settings'}
+              onUserChanged={() => setUsersRefreshKey((k) => k + 1)}
+            />
           </Animated.View>
         )}
 
@@ -263,12 +311,11 @@ const HomeScreen: React.FC = () => {
         )}
       </View>
 
-      {/* Bottom nav — admin only, always on top */}
-      {isAdmin && (
-        <SafeAreaView edges={['bottom']} style={styles.navWrapper}>
-          <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
-        </SafeAreaView>
-      )}
+      {/* Bottom nav — all logged-in users */}
+      <SafeAreaView edges={['bottom']} style={styles.navWrapper}>
+        <BottomNav activeTab={activeTab} isAdmin={isAdmin} onTabChange={setActiveTab} />
+
+      </SafeAreaView>
     </View>
   );
 };

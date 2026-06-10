@@ -2,46 +2,35 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, RADIUS } from '../constants/theme';
-import { toggleAll } from '../api/devices';
+import { lightsOn, fansOn, allOff as apiAllOff } from '../api/devices';
 
 interface MasterControlProps {
   onAllLightsOn: () => void;
-  onAllLightsOff: () => void;
   onAllFansOn: () => void;
-  onAllFansOff: () => void;
   onAllOff: () => void;
 }
 
 const MasterControl: React.FC<MasterControlProps> = ({
   onAllLightsOn,
-  onAllLightsOff,
   onAllFansOn,
-  onAllFansOff,
   onAllOff,
 }) => {
-  const handleToggleAll = async () => {
-    try {
-      await toggleAll();
-    } catch (e) {
-      // ignore errors; UI will reconcile via getStates in HomeScreen
-    }
-  };
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Master Control</Text>
 
       <View style={styles.buttons}>
-        <TouchableOpacity style={styles.btn} onPress={async () => { await handleToggleAll(); onAllLightsOn(); }}>
+        <TouchableOpacity style={styles.btn} onPress={async () => { try { await lightsOn(); } catch (_) {} onAllLightsOn(); }}>
           <Ionicons name="bulb" size={14} color={COLORS.accent} />
           <Text style={styles.btnText}>All Lights On</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.btn} onPress={async () => { await handleToggleAll(); onAllFansOn(); }}>
+        <TouchableOpacity style={styles.btn} onPress={async () => { try { await fansOn(); } catch (_) {} onAllFansOn(); }}>
           <Ionicons name="sync" size={14} color={COLORS.accent} />
           <Text style={styles.btnText}>All Fans On</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.btn, styles.btnDanger]} onPress={async () => { await handleToggleAll(); onAllOff(); }}>
+        <TouchableOpacity style={[styles.btn, styles.btnDanger]} onPress={async () => { try { await apiAllOff(); } catch (_) {} onAllOff(); }}>
           <Ionicons name="power-outline" size={14} color="#fff" />
           <Text style={[styles.btnText, styles.btnTextDanger]}>All Off</Text>
         </TouchableOpacity>
