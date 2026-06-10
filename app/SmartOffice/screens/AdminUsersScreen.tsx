@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,17 +13,28 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COLORS, SPACING, RADIUS } from '../constants/theme';
-import { useAuth, AppUser } from '../context/AuthContext';
 import { INITIAL_CABINS } from '../constants/cabinData';
+import { listUsers, assignUserRooms } from '../api/devices';
+
+interface BackendUser {
+  username: string;
+  role: string;
+  rooms: string[];
+}
+
+// r1 <-> cabin-1
+const roomToCabinId = (room: string) => `cabin-${room.replace('r', '')}`;
+const cabinIdToRoom = (cabinId: string) => `r${cabinId.replace('cabin-', '')}`;
 
 interface AssignModalProps {
-  user: AppUser | null;
+  user: BackendUser | null;
   onClose: () => void;
   onAssign: (cabinId: string | null) => void;
 }
 
 const AssignModal: React.FC<AssignModalProps> = ({ user, onClose, onAssign }) => {
   if (!user) return null;
+  const assignedCabinId = user.rooms.length > 0 ? roomToCabinId(user.rooms[0]) : null;
 
   return (
     <Modal transparent animationType="fade" visible onRequestClose={onClose}>
@@ -33,7 +44,7 @@ const AssignModal: React.FC<AssignModalProps> = ({ user, onClose, onAssign }) =>
           <View style={modal.header}>
             <View>
               <Text style={modal.title}>Assign Cabin</Text>
-              <Text style={modal.subtitle}>{user.name}</Text>
+              <Text style={modal.subtitle}>{user.username}</Text>
             </View>
             <TouchableOpacity style={modal.closeBtn} onPress={onClose}>
               <Ionicons name="close" size={18} color={COLORS.textSecondary} />
@@ -44,7 +55,7 @@ const AssignModal: React.FC<AssignModalProps> = ({ user, onClose, onAssign }) =>
           <TouchableOpacity
             style={[
               modal.cabinRow,
-              user.assignedCabinId === null && modal.cabinRowActive,
+              assignedCabinId === null && modal.cabinRowActive,
             ]}
             onPress={() => onAssign(null)}
             activeOpacity={0.7}
@@ -56,7 +67,7 @@ const AssignModal: React.FC<AssignModalProps> = ({ user, onClose, onAssign }) =>
               <Text style={modal.cabinName}>No Cabin</Text>
               <Text style={modal.cabinSub}>Remove cabin assignment</Text>
             </View>
-            {user.assignedCabinId === null && (
+            {assignedCabinId === null && (
               <Ionicons name="checkmark-circle" size={20} color={COLORS.accent} />
             )}
           </TouchableOpacity>
@@ -65,7 +76,7 @@ const AssignModal: React.FC<AssignModalProps> = ({ user, onClose, onAssign }) =>
 
           <ScrollView showsVerticalScrollIndicator={false} style={modal.list}>
             {INITIAL_CABINS.map((cabin) => {
-              const isActive = user.assignedCabinId === cabin.id;
+              const isActive = assignedCabinId === cabin.id;
               return (
                 <TouchableOpacity
                   key={cabin.id}
@@ -99,40 +110,55 @@ const AssignModal: React.FC<AssignModalProps> = ({ user, onClose, onAssign }) =>
   );
 };
 
-const AdminUsersScreen: React.FC = () => {
-  const { users, assignCabin } = useAuth();
-  const [selectedUser, setSelectedUser] = useState<AppUser | null>(null);
+interface AdminUsersScreenProps {
+  refreshKey?: number;
+}
+
+const AdminUsersScreen: React.FC<AdminUsersScreenProps> = ({ refreshKey }) => {
+  const [users, setUsers] = useState<BackendUser[]>([]);
+  const [selectedUser, setSelectedUser] = useState<BackendUser | null>(null);
+
+  const fetchUsers = useCallback(async () => {
+    try {
+      const data = await listUsers();
+      setUsers(data);
+    } catch (_) {}
+  }, []);
+
+  useEffect(() => { fetchUsers(); }, [fetchUsers, refreshKey]);
 
   const handleAssign = async (cabinId: string | null) => {
     if (!selectedUser) return;
-    await assignCabin(selectedUser.id, cabinId);
+    const rooms = cabinId ? [cabinIdToRoom(cabinId)] : [];
+    try {
+      await assignUserRooms(selectedUser.username, rooms);
+      setUsers((prev) =>
+        prev.map((u) => u.username === selectedUser.username ? { ...u, rooms } : u)
+      );
+    } catch (_) {}
     setSelectedUser(null);
   };
 
-  const getCabinLabel = (cabinId: string | null) => {
-    if (!cabinId) return null;
-    const cabin = INITIAL_CABINS.find((c) => c.id === cabinId);
-    return cabin?.name ?? null;
+  const getCabinLabel = (rooms: string[]) => {
+    if (!rooms.length) return null;
+    const cabinId = roomToCabinId(rooms[0]);
+    return INITIAL_CABINS.find((c) => c.id === cabinId)?.name ?? null;
   };
 
   const getInitials = (name: string) =>
-    name
-      .split(' ')
-      .slice(0, 2)
-      .map((w) => w[0]?.toUpperCase() ?? '')
-      .join('');
+    name.slice(0, 2).toUpperCase();
 
-  const renderUser = ({ item }: { item: AppUser }) => {
-    const cabinLabel = getCabinLabel(item.assignedCabinId);
+  const renderUser = ({ item }: { item: BackendUser }) => {
+    const cabinLabel = getCabinLabel(item.rooms);
     return (
       <View style={styles.userCard}>
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{getInitials(item.name)}</Text>
+          <Text style={styles.avatarText}>{getInitials(item.username)}</Text>
         </View>
 
         <View style={styles.userInfo}>
-          <Text style={styles.userName}>{item.name}</Text>
-          <Text style={styles.userEmail} numberOfLines={1}>{item.email}</Text>
+          <Text style={styles.userName}>{item.username}</Text>
+          <Text style={styles.userEmail} numberOfLines={1}>{item.role}</Text>
           {cabinLabel ? (
             <View style={styles.cabinChip}>
               <Ionicons name="grid" size={10} color={COLORS.accent} />
@@ -191,7 +217,7 @@ const AdminUsersScreen: React.FC = () => {
           <FlatList
             data={users}
             renderItem={renderUser}
-            keyExtractor={(u) => u.id}
+            keyExtractor={(u) => u.username}
             contentContainerStyle={styles.list}
             showsVerticalScrollIndicator={false}
           />

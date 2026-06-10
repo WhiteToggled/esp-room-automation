@@ -13,8 +13,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-
 import { COLORS, SPACING, RADIUS } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 
@@ -26,11 +24,10 @@ const LoginScreen: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const { login } = useAuth();
-  const router = useRouter();
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      setError('Please enter your email and password.');
+      setError('Please enter your username and password.');
       return;
     }
     setError('');
@@ -38,7 +35,7 @@ const LoginScreen: React.FC = () => {
     const success = await login(email.trim(), password);
     setLoading(false);
     if (!success) {
-      setError('Invalid email or password.');
+      setError('Invalid username or password.');
     }
     // Navigation handled by _layout NavigationGuard on user state change
   };
@@ -141,23 +138,7 @@ const LoginScreen: React.FC = () => {
                 )}
               </TouchableOpacity>
 
-              {/* Divider */}
-              <View style={styles.divider}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>or</Text>
-                <View style={styles.dividerLine} />
-              </View>
-
-              {/* Sign Up link */}
-              <TouchableOpacity
-                style={styles.signUpBtn}
-                onPress={() => router.push('/signup')}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.signUpText}>Create an account</Text>
-              </TouchableOpacity>
-
-              <Text style={styles.adminHint}>Admin: admin@smartoffice.com</Text>
+              <Text style={styles.adminHint}>Contact your admin for account access.</Text>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -227,19 +208,6 @@ const styles = StyleSheet.create({
   },
   btnDisabled: { opacity: 0.6 },
   signInText: { color: '#fff', fontSize: 16, fontWeight: '600', marginRight: SPACING.xs },
-  divider: {
-    flexDirection: 'row', alignItems: 'center',
-    marginVertical: SPACING.lg,
-  },
-  dividerLine: { flex: 1, height: 1, backgroundColor: COLORS.glassBorder },
-  dividerText: { color: COLORS.textMuted, fontSize: 12, marginHorizontal: SPACING.sm },
-  signUpBtn: {
-    height: 52, borderRadius: RADIUS.md,
-    borderWidth: 1, borderColor: COLORS.glassBorder,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.03)',
-  },
-  signUpText: { color: COLORS.text, fontSize: 15, fontWeight: '500' },
   adminHint: {
     color: COLORS.textMuted, fontSize: 11,
     textAlign: 'center', marginTop: SPACING.lg,

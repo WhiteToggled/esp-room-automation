@@ -33,6 +33,34 @@ async function post(path: string, body: any) {
   return res.json();
 }
 
+async function del(path: string) {
+  const token = await getToken();
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: 'DELETE',
+    headers: {
+      'Accept': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!res.ok) throw res;
+  return res.json();
+}
+
+async function put(path: string, body: any) {
+  const token = await getToken();
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: 'PUT',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw res;
+  return res.json();
+}
+
 // Specialized helper for OAuth2 form posts
 async function postForm(path: string, form: Record<string, string>) {
   const body = Object.keys(form)
@@ -50,4 +78,4 @@ async function postForm(path: string, form: Record<string, string>) {
   return res.json();
 }
 
-export default { get, post, postForm, getToken };
+export default { get, post, put, del, postForm, getToken };

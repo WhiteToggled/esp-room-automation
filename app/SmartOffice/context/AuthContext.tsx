@@ -61,17 +61,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     (async () => {
-      const [id, list] = await Promise.all([
+      const [id, list, token] = await Promise.all([
         AsyncStorage.getItem(SESSION_KEY),
         loadUsers(),
+        AsyncStorage.getItem(TOKEN_STORAGE_KEY),
       ]);
       setUsers(list);
       if (id) {
-        const found =
-          id === ADMIN.id
-            ? ADMIN
-            : (list.find((u) => u.id === id) ?? null);
-        setUser(found);
+        if (id === ADMIN.id) {
+          setUser(ADMIN);
+        } else if (token) {
+          try {
+            // Fetch live profile so room assignments are always current
+            const me = await apiClient.get('/me');
+            const rooms: string[] = me.rooms ?? [];
+            const assignedCabinId = rooms[0]
+              ? 'cabin-' + rooms[0].replace('r', '')
+              : null;
+            setUser({
+              id: me.username,
+              name: me.username,
+              email: me.username,
+              password: '',
+              role: me.role === 'admin' ? 'admin' : 'user',
+              assignedCabinId,
+            });
+          } catch (_) {
+            // Token expired — force re-login
+            await AsyncStorage.multiRemove([SESSION_KEY, TOKEN_STORAGE_KEY]);
+          }
+        }
       }
       setLoading(false);
     })();
@@ -84,6 +103,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const resp = await apiClient.postForm('/login', { username, password });
       const token = resp.access_token;
       const role = resp.role ?? 'user';
+      const rooms: string[] = resp.rooms ?? [];
+      const assignedCabinId = rooms[0] ? 'cabin-' + rooms[0].replace('r', '') : null;
       await AsyncStorage.setItem(TOKEN_STORAGE_KEY, token);
       await AsyncStorage.setItem(SESSION_KEY, username);
       const userObj: AppUser = {
@@ -92,13 +113,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: email.toLowerCase(),
         password: '',
         role: role === 'admin' ? 'admin' : 'user',
-        assignedCabinId: null,
+        assignedCabinId,
       };
-      setUsers((prev) => {
-        // keep local users list but ensure this user is present
-        const exists = prev.some((u) => u.id === username);
-        return exists ? prev : [...prev, userObj];
-      });
       setUser(userObj);
       return true;
     } catch (e) {

@@ -29,11 +29,6 @@ const Header: React.FC<HeaderProps> = ({
         </View>
 
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.iconBtn}>
-            <Ionicons name="notifications-outline" size={20} color={COLORS.textSecondary} />
-            <View style={styles.notifDot} />
-          </TouchableOpacity>
-
           {onLogout ? (
             <TouchableOpacity style={styles.iconBtn} onPress={onLogout}>
               <Ionicons name="log-out-outline" size={22} color={COLORS.textSecondary} />
@@ -107,18 +102,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginLeft: SPACING.sm,
     position: 'relative',
-  },
-
-  notifDot: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: COLORS.accent,
-    borderWidth: 1.5,
-    borderColor: COLORS.background,
   },
 
   statsRow: {
