@@ -186,11 +186,11 @@ const ScheduleFormModal: React.FC<ScheduleFormProps> = ({
               </View>
               <Text style={fm.timeSep}>:</Text>
               <View style={fm.timeUnit}>
-                <TouchableOpacity style={fm.timeArrow} onPress={() => adjMin(5)}>
+                <TouchableOpacity style={fm.timeArrow} onPress={() => adjMin(1)}>
                   <Ionicons name="chevron-up" size={22} color={COLORS.accent} />
                 </TouchableOpacity>
                 <Text style={fm.timeDigit}>{String(form.minute).padStart(2, '0')}</Text>
-                <TouchableOpacity style={fm.timeArrow} onPress={() => adjMin(-5)}>
+                <TouchableOpacity style={fm.timeArrow} onPress={() => adjMin(-1)}>
                   <Ionicons name="chevron-down" size={22} color={COLORS.accent} />
                 </TouchableOpacity>
               </View>
