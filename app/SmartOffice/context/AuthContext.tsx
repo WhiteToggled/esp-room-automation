@@ -15,58 +15,41 @@ export interface AppUser {
 interface AuthContextValue {
   user: AppUser | null;
   loading: boolean;
-  users: AppUser[];
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
   signup: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  assignCabin: (userId: string, cabinId: string | null) => Promise<void>;
 }
 
 const ADMIN: AppUser = {
   id: 'admin',
   name: 'Admin',
-  email: 'admin@smartoffice.com',
+  email: 'admin@nestboard.com',
   password: 'admin123',
   role: 'admin',
   assignedCabinId: null,
 };
 
-const USERS_KEY = 'smartoffice_users';
-const SESSION_KEY = 'smartoffice_session';
+const SESSION_KEY = 'nestboard_session';
 const TOKEN_STORAGE_KEY = TOKEN_KEY;
 
 const AuthContext = createContext<AuthContextValue>({
   user: null,
   loading: true,
-  users: [],
   login: async () => false,
   logout: async () => {},
   signup: async () => ({ success: false }),
-  assignCabin: async () => {},
 });
-
-async function loadUsers(): Promise<AppUser[]> {
-  const raw = await AsyncStorage.getItem(USERS_KEY);
-  return raw ? JSON.parse(raw) : [];
-}
-
-async function saveUsers(users: AppUser[]): Promise<void> {
-  await AsyncStorage.setItem(USERS_KEY, JSON.stringify(users));
-}
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<AppUser | null>(null);
-  const [users, setUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
-      const [id, list, token] = await Promise.all([
+      const [id, token] = await Promise.all([
         AsyncStorage.getItem(SESSION_KEY),
-        loadUsers(),
         AsyncStorage.getItem(TOKEN_STORAGE_KEY),
       ]);
-      setUsers(list);
       if (id) {
         if (id === ADMIN.id) {
           setUser(ADMIN);
@@ -148,10 +131,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: 'user',
         assignedCabinId: null,
       };
-      const list = await loadUsers();
-      const updated = [...list, newUser];
-      await saveUsers(updated);
-      setUsers(updated);
       setUser(newUser);
       return { success: true };
     } catch (err: any) {
@@ -164,21 +143,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const assignCabin = async (userId: string, cabinId: string | null): Promise<void> => {
-    const list = await loadUsers();
-    const updated = list.map((u) =>
-      u.id === userId ? { ...u, assignedCabinId: cabinId } : u
-    );
-    await saveUsers(updated);
-    setUsers(updated);
-    // Update current session if the assigned user is logged in
-    if (user?.id === userId) {
-      setUser((prev) => prev ? { ...prev, assignedCabinId: cabinId } : prev);
-    }
-  };
-
   return (
-    <AuthContext.Provider value={{ user, loading, users, login, logout, signup, assignCabin }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, signup }}>
       {children}
     </AuthContext.Provider>
   );

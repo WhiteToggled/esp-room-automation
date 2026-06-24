@@ -1,2 +1,2 @@
-export const BASE_URL = 'http://10.10.31.100:8000';
-export const TOKEN_KEY = 'smartoffice_token';
+export const BASE_URL = 'http://192.168.1.3:8000';
+export const TOKEN_KEY = 'nestboard_token';
