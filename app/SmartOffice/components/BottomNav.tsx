@@ -17,6 +17,7 @@ interface Tab {
 const TABS: Tab[] = [
   { name: 'home',      icon: 'home-outline',     label: 'Home' },
   { name: 'schedules', icon: 'calendar-outline', label: 'Schedules' },
+  { name: 'analytics', icon: 'bar-chart-outline', label: 'Analytics', adminOnly: true },
   { name: 'users',     icon: 'people-outline',   label: 'Users',    adminOnly: true },
   { name: 'settings',  icon: 'settings-outline', label: 'Settings', adminOnly: true },
   { name: 'logs',      icon: 'document-text-outline', label: 'Logs', adminOnly: true },

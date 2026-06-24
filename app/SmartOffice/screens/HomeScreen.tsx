@@ -95,7 +95,7 @@ const HomeScreen: React.FC = () => {
 
   useEffect(() => {
     offset.value = withTiming(tabOffset(activeTab, isAdmin), TIMING);
-  }, [activeTab, isAdmin]);
+  }, [activeTab, isAdmin, offset]);
 
   // Home is always at position 0 — slides left as offset increases
   const homeAnimStyle = useAnimatedStyle(() => ({
@@ -107,13 +107,13 @@ const HomeScreen: React.FC = () => {
     transform: [{ translateX: (1 - offset.value) * SCREEN_WIDTH }],
   }));
 
-  // Users: position 2 (admin only)
-  const usersAnimStyle = useAnimatedStyle(() => ({
+  // Analytics: position 2 (admin only)
+  const analyticsAnimStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: (2 - offset.value) * SCREEN_WIDTH }],
   }));
 
-  // Settings: always position 3 (admin only)
-  const settingsAnimStyle = useAnimatedStyle(() => ({
+  // Users: position 3 (admin only)
+  const usersAnimStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: (3 - offset.value) * SCREEN_WIDTH }],
   }));
 
@@ -340,6 +340,16 @@ const HomeScreen: React.FC = () => {
             pointerEvents={activeTab === 'logs' ? 'auto' : 'none'}
           >
             {visitedTabs.has('logs') && <LogsScreen isActive={activeTab === 'logs'} />}
+          </Animated.View>
+        )}
+
+        {/* Analytics tab (admin only) */}
+        {isAdmin && (
+          <Animated.View
+            style={[StyleSheet.absoluteFill, analyticsAnimStyle]}
+            pointerEvents={activeTab === 'analytics' ? 'auto' : 'none'}
+          >
+            <AnalyticsScreen />
           </Animated.View>
         )}
       </View>
