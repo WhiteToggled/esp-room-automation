@@ -1,4 +1,4 @@
-export const COLORS = {
+export const darkColors = {
   background: '#0E0F14',
   surface: '#161820',
   surfaceLight: '#1E2028',
@@ -16,6 +16,27 @@ export const COLORS = {
   blue: '#60A5FA',
 };
 
+export const lightColors: typeof darkColors = {
+  background: '#F4F5F8',
+  surface: '#FFFFFF',
+  surfaceLight: '#EFF0F4',
+  glass: 'rgba(20,22,30,0.04)',
+  glassBorder: 'rgba(20,22,30,0.09)',
+  glassHighlight: 'rgba(20,22,30,0.12)',
+  accent: '#FF7A00',
+  accentLight: '#E96D00',
+  accentGlow: 'rgba(255,122,0,0.16)',
+  text: '#14161B',
+  textSecondary: 'rgba(20,22,27,0.62)',
+  textMuted: 'rgba(20,22,27,0.38)',
+  toggleOff: 'rgba(20,22,30,0.14)',
+  success: '#1FA15A',
+  blue: '#2F7DE0',
+};
+
+export type ThemeColors = typeof darkColors;
+export type ThemeMode = 'light' | 'dark';
+
 export const SPACING = {
   xs: 4,
   sm: 8,
@@ -32,13 +53,4 @@ export const RADIUS = {
   lg: 20,
   xl: 26,
   full: 999,
-};
-
-export const FONTS = {
-  thin: '100',
-  light: '300',
-  regular: '400',
-  medium: '500',
-  semibold: '600',
-  bold: '700',
 };

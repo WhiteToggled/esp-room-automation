@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, SPACING, RADIUS } from '../constants/theme';
+import { SPACING, RADIUS, ThemeColors } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 import { lightsOn, fansOn, allOff as apiAllOff } from '../api/devices';
 
 interface MasterControlProps {
@@ -15,22 +16,25 @@ const MasterControl: React.FC<MasterControlProps> = ({
   onAllFansOn,
   onAllOff,
 }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Master Control</Text>
 
       <View style={styles.buttons}>
-        <TouchableOpacity style={styles.btn} onPress={async () => { try { await lightsOn(); } catch (_) {} onAllLightsOn(); }}>
-          <Ionicons name="bulb" size={14} color={COLORS.accent} />
+        <TouchableOpacity style={styles.btn} onPress={async () => { try { await lightsOn(); } catch (_) {} onAllLightsOn(); }} activeOpacity={0.7}>
+          <Ionicons name="bulb" size={14} color={colors.accent} />
           <Text style={styles.btnText}>All Lights On</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.btn} onPress={async () => { try { await fansOn(); } catch (_) {} onAllFansOn(); }}>
-          <Ionicons name="sync" size={14} color={COLORS.accent} />
+        <TouchableOpacity style={styles.btn} onPress={async () => { try { await fansOn(); } catch (_) {} onAllFansOn(); }} activeOpacity={0.7}>
+          <Ionicons name="sync" size={14} color={colors.accent} />
           <Text style={styles.btnText}>All Fans On</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.btn, styles.btnDanger]} onPress={async () => { try { await apiAllOff(); } catch (_) {} onAllOff(); }}>
+        <TouchableOpacity style={[styles.btn, styles.btnDanger]} onPress={async () => { try { await apiAllOff(); } catch (_) {} onAllOff(); }} activeOpacity={0.7}>
           <Ionicons name="power-outline" size={14} color="#fff" />
           <Text style={[styles.btnText, styles.btnTextDanger]}>All Off</Text>
         </TouchableOpacity>
@@ -39,19 +43,19 @@ const MasterControl: React.FC<MasterControlProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     marginHorizontal: SPACING.xl,
     marginBottom: SPACING.lg,
-    backgroundColor: COLORS.glass,
+    backgroundColor: colors.glass,
     borderWidth: 1,
-    borderColor: COLORS.glassBorder,
+    borderColor: colors.glassBorder,
     borderRadius: RADIUS.lg,
     padding: SPACING.md,
   },
 
   title: {
-    color: COLORS.textMuted,
+    color: colors.textMuted,
     fontSize: 10,
     fontWeight: '600',
     letterSpacing: 1,
@@ -82,7 +86,7 @@ const styles = StyleSheet.create({
   },
 
   btnText: {
-    color: COLORS.accent,
+    color: colors.accent,
     fontSize: 10,
     fontWeight: '600',
     marginLeft: 4, // replaces gap

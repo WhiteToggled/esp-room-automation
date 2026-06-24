@@ -23,10 +23,6 @@ export async function toggle(deviceId: string) {
   return client.post(`/toggle/${encodeURIComponent(deviceId)}`, {});
 }
 
-export async function toggleAll() {
-  return client.post('/toggle-all', {});
-}
-
 export async function lightsOn() {
   return client.post('/lights/on', {});
 }
@@ -39,11 +35,31 @@ export async function allOff() {
   return client.post('/all/off', {});
 }
 
-export async function getLogs(limit = 500) {
-  return client.get('/logs?limit=' + limit);
+export interface StateLogEntry {
+  id: number;
+  logged_at: string;
+  snapshot: Record<string, number>;
 }
 
-export async function triggerLog() {
+export async function getLogs(limit = 100): Promise<StateLogEntry[]> {
+  return client.get(`/logs?limit=${limit}`);
+}
+
+export type LogRangePeriod = 'day' | 'week' | 'month';
+
+export interface LogBucket {
+  bucket_start: string;
+  avg_on: number;
+  peak_on: number;
+  total: number;
+  samples: number;
+}
+
+export async function getLogsRange(period: LogRangePeriod): Promise<LogBucket[]> {
+  return client.get(`/logs/range?period=${period}`);
+}
+
+export async function triggerLog(): Promise<{ message: string; logged_at: string; snapshot: Record<string, number> }> {
   return client.post('/logs/trigger', {});
 }
 

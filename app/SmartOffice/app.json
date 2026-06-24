@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "SmartOffice",
-    "slug": "SmartOffice",
+    "name": "Nestboard",
+    "slug": "Nestboard",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "smartoffice",
+    "scheme": "nestboard",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {

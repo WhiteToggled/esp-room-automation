@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { memo, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,24 +11,52 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import GlassCard from './GlassCard';
 import ToggleSwitch from './ToggleSwitch';
+import FadeInView from './FadeInView';
 import { Cabin } from '../constants/cabinData';
-import { COLORS, SPACING } from '../constants/theme';
+import { SPACING, ThemeColors } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 
 interface CabinCardProps {
   cabin: Cabin;
-  onToggleLight: () => void;
-  onToggleFan: () => void;
-  onPress: () => void;
+  index?: number;
+  onToggleLight: (cabinId: string) => void;
+  onToggleFan: (cabinId: string) => void;
+  onExpand: (cabinId: string) => void;
 }
+
+// Brief scale "pop" on an icon wrap whenever a device flips on/off, skipping the initial mount.
+const usePulseOnChange = (value: boolean) => {
+  const scale = useRef(new Animated.Value(1)).current;
+  const mounted = useRef(false);
+
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    Animated.sequence([
+      Animated.timing(scale, { toValue: 1.3, duration: 110, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1, useNativeDriver: true, damping: 9, stiffness: 180 }),
+    ]).start();
+  }, [value]);
+
+  return scale;
+};
 
 const CabinCard: React.FC<CabinCardProps> = ({
   cabin,
+  index = 0,
   onToggleLight,
   onToggleFan,
-  onPress,
+  onExpand,
 }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const isAnyOn = cabin.light.isOn || cabin.fan.isOn;
+
+  const lightPulse = usePulseOnChange(cabin.light.isOn);
+  const fanPulse = usePulseOnChange(cabin.fan.isOn);
 
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
@@ -49,74 +77,76 @@ const CabinCard: React.FC<CabinCardProps> = ({
   };
 
   return (
-    <Animated.View style={[styles.wrapper, { transform: [{ scale: scaleAnim }] }]}>
-      <GlassCard style={styles.card} highlighted={isAnyOn as boolean}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.cabinBadge}>
-            <Text style={styles.cabinNumber}>{cabin.number}</Text>
-          </View>
-
-          <TouchableOpacity
-            onPress={onPress}
-            onPressIn={handlePressIn}
-            onPressOut={handlePressOut}
-            style={styles.expandBtn}
-          >
-            <Ionicons name="expand-outline" size={14} color={COLORS.textSecondary} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Name */}
-        <Text style={styles.cabinName}>{cabin.name}</Text>
-
-        {/* Status */}
-        <View style={styles.statusRow}>
-          <View style={[styles.statusDot, isAnyOn ? styles.statusDotOn : styles.statusDotOff]} />
-          <Text style={styles.statusText}>{isAnyOn ? 'Active' : 'Idle'}</Text>
-        </View>
-
-        <View style={styles.divider} />
-
-        {/* Light */}
-        <View style={styles.deviceRow}>
-          <View style={styles.deviceLeft}>
-            <View style={[styles.iconWrap, cabin.light.isOn && styles.iconWrapOn]}>
-              <Ionicons
-                name="bulb-outline"
-                size={14}
-                color={cabin.light.isOn ? COLORS.accent : COLORS.textMuted}
-              />
+    <FadeInView delay={Math.min(index, 8) * 60} distance={16} style={styles.wrapper}>
+      <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+        <GlassCard style={styles.card} highlighted={isAnyOn as boolean}>
+          {/* Header */}
+          <View style={styles.header}>
+            <View style={styles.cabinBadge}>
+              <Text style={styles.cabinNumber}>{cabin.number}</Text>
             </View>
-            <Text style={[styles.deviceLabel, cabin.light.isOn && styles.deviceLabelOn]}>
-              Light
-            </Text>
-          </View>
-          <ToggleSwitch isOn={cabin.light.isOn} onToggle={onToggleLight} size="sm" />
-        </View>
 
-        {/* Fan */}
-        <View style={[styles.deviceRow, { marginTop: SPACING.sm }]}>
-          <View style={styles.deviceLeft}>
-            <View style={[styles.iconWrap, cabin.fan.isOn && styles.iconWrapOn]}>
-              <Ionicons
-                name="sync-outline"
-                size={14}
-                color={cabin.fan.isOn ? COLORS.accent : COLORS.textMuted}
-              />
-            </View>
-            <Text style={[styles.deviceLabel, cabin.fan.isOn && styles.deviceLabelOn]}>
-              Fan
-            </Text>
+            <TouchableOpacity
+              onPress={() => onExpand(cabin.id)}
+              onPressIn={handlePressIn}
+              onPressOut={handlePressOut}
+              style={styles.expandBtn}
+            >
+              <Ionicons name="expand-outline" size={14} color={colors.textSecondary} />
+            </TouchableOpacity>
           </View>
-          <ToggleSwitch isOn={cabin.fan.isOn} onToggle={onToggleFan} size="sm" />
-        </View>
-      </GlassCard>
-    </Animated.View>
+
+          {/* Name */}
+          <Text style={styles.cabinName}>{cabin.name}</Text>
+
+          {/* Status */}
+          <View style={styles.statusRow}>
+            <View style={[styles.statusDot, isAnyOn ? styles.statusDotOn : styles.statusDotOff]} />
+            <Text style={styles.statusText}>{isAnyOn ? 'Active' : 'Idle'}</Text>
+          </View>
+
+          <View style={styles.divider} />
+
+          {/* Light */}
+          <View style={styles.deviceRow}>
+            <View style={styles.deviceLeft}>
+              <Animated.View style={[styles.iconWrap, cabin.light.isOn && styles.iconWrapOn, { transform: [{ scale: lightPulse }] }]}>
+                <Ionicons
+                  name="bulb-outline"
+                  size={14}
+                  color={cabin.light.isOn ? colors.accent : colors.textMuted}
+                />
+              </Animated.View>
+              <Text style={[styles.deviceLabel, cabin.light.isOn && styles.deviceLabelOn]}>
+                Light
+              </Text>
+            </View>
+            <ToggleSwitch isOn={cabin.light.isOn} onToggle={() => onToggleLight(cabin.id)} size="sm" />
+          </View>
+
+          {/* Fan */}
+          <View style={[styles.deviceRow, { marginTop: SPACING.sm }]}>
+            <View style={styles.deviceLeft}>
+              <Animated.View style={[styles.iconWrap, cabin.fan.isOn && styles.iconWrapOn, { transform: [{ scale: fanPulse }] }]}>
+                <Ionicons
+                  name="sync-outline"
+                  size={14}
+                  color={cabin.fan.isOn ? colors.accent : colors.textMuted}
+                />
+              </Animated.View>
+              <Text style={[styles.deviceLabel, cabin.fan.isOn && styles.deviceLabelOn]}>
+                Fan
+              </Text>
+            </View>
+            <ToggleSwitch isOn={cabin.fan.isOn} onToggle={() => onToggleFan(cabin.id)} size="sm" />
+          </View>
+        </GlassCard>
+      </Animated.View>
+    </FadeInView>
   );
 };
 
-const styles = StyleSheet.create<{
+const createStyles = (colors: ThemeColors) => StyleSheet.create<{
   wrapper: ViewStyle;
   card: ViewStyle;
   header: ViewStyle;
@@ -154,12 +184,12 @@ const styles = StyleSheet.create<{
     width: 28,
     height: 28,
     borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.glassHighlight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   cabinNumber: {
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     fontSize: 11,
     fontWeight: '600',
   },
@@ -171,7 +201,7 @@ const styles = StyleSheet.create<{
     borderRadius: 6,
   },
   cabinName: {
-    color: COLORS.text,
+    color: colors.text,
     fontSize: 15,
     fontWeight: '600',
     marginTop: 6,
@@ -188,19 +218,19 @@ const styles = StyleSheet.create<{
     marginRight: 5,
   },
   statusDotOn: {
-    backgroundColor: COLORS.accent,
+    backgroundColor: colors.accent,
   },
   statusDotOff: {
-    backgroundColor: COLORS.textMuted,
+    backgroundColor: colors.textMuted,
   },
   statusText: {
-    color: COLORS.textMuted,
+    color: colors.textMuted,
     fontSize: 10,
     textTransform: 'uppercase',
   },
   divider: {
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: colors.glassBorder,
     marginBottom: SPACING.sm,
   },
   deviceRow: {
@@ -224,12 +254,12 @@ const styles = StyleSheet.create<{
     backgroundColor: 'rgba(255,122,0,0.15)',
   },
   deviceLabel: {
-    color: COLORS.textMuted,
+    color: colors.textMuted,
     fontSize: 12,
   },
   deviceLabelOn: {
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
   },
 });
 
-export default CabinCard;
+export default memo(CabinCard);
