@@ -1,17 +1,10 @@
 #pragma once
 
-// connect to this wifi
-#define WIFI_SSID ""
-#define WIFI_PASSWORD ""
-
-// mqtt servr
-#define MQTT_SERVER ""
-#define MQTT_PORT 1883
-#define MQTT_CLIENT_ID "ESP32_Nestboard1"
-
 #define STATUS_LED 2
+#define BOOT_BUTTON_PIN 15
+#define RESET_HOLD_TIME 5000
 
-#define BOX_1
+#define BOX_2
 
 #ifdef BOX_1
 inline const int RELAY_PINS[8] = {4, 16, 17, 18, 19, 21, 22, 23};
@@ -24,8 +17,9 @@ inline const char* MQTT_TOPICS[8] = {
 };
 
 #elif defined(BOX_2)
-inline const int RELAY_PINS[8] = {14, 27, 26, 25, 33, 32, 13, 12};
-inline const int SWITCH_PINS[8] = {};
+// inline const int RELAY_PINS[8] = {14, 27, 26, 25, 33, 32, 13, 12};
+inline const int RELAY_PINS[8] = {23, 22, 21, 19, 18, 5, 17, 4};
+inline const int SWITCH_PINS[8] = {32, 33, 25, 26, 27, 14, 12, 13};
 inline const char *MQTT_TOPICS[8] = {
   "r5/l1", "r5/f1",
   "r6/l1", "r6/f1",
@@ -35,4 +29,4 @@ inline const char *MQTT_TOPICS[8] = {
 
 #endif // DEBUG
 
-#define DEBOUNCE_DELAY 150
+#define DEBOUNCE_DELAY 100

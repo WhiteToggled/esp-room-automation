@@ -1,6 +1,8 @@
 #include <Arduino.h>
+#include <Preferences.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
+#include <WiFiManager.h>
 
 #include "comms.h"
 #include "config.h"
@@ -8,6 +10,7 @@
 #include "soc/soc.h"
 
 WiFiClient espClient;
+extern Preferences prefs;
 PubSubClient client(espClient);
 
 //  ----- VARIABLES -----------
@@ -30,6 +33,7 @@ void (*ISR_functions[8])() = {handleISR_0, handleISR_1, handleISR_2,
                               handleISR_3, handleISR_4, handleISR_5,
                               handleISR_6, handleISR_7};
 
+void check_reset();
 void detect_switchboard();
 void sync_server();
 // ---------------------------
@@ -39,6 +43,9 @@ void setup() {
     WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); // disable brownout protect
 
     pinMode(STATUS_LED, OUTPUT);
+
+    pinMode(BOOT_BUTTON_PIN, INPUT_PULLUP);
+
     for (unsigned int i = 0; i < 8; ++i) {
         pinMode(RELAY_PINS[i], OUTPUT);
         digitalWrite(RELAY_PINS[i],
@@ -51,11 +58,12 @@ void setup() {
 
     connect_to_wifi();
 
-    client.setServer(MQTT_SERVER, MQTT_PORT);
+    client.setServer(mqtt_server, atoi(mqtt_port));
     client.setCallback(callback);
 }
 
 void loop() {
+    check_reset();
     if (WiFi.status() != WL_CONNECTED) {
         wifi_reconnect();
         return;
@@ -74,23 +82,24 @@ void detect_switchboard() {
     unsigned long curr_time = millis();
 
     for (int i = 0; i < 8; ++i) {
-        if (switch_pressed[i]) {
-            noInterrupts();
-            switch_pressed[i] = false;
-            interrupts();
-            if ((curr_time - switch_debounce_time[i]) > DEBOUNCE_DELAY) {
-                switch_debounce_time[i] = curr_time;
+        if (!switch_pressed[i])
+            continue;
 
-                bool curr_state = digitalRead(SWITCH_PINS[i]);
-                // pullup so HIGH = OPEN, LOW = CLOSED
+        noInterrupts();
+        switch_pressed[i] = false;
+        interrupts();
+        if ((curr_time - switch_debounce_time[i]) < DEBOUNCE_DELAY)
+            continue;
 
-                digitalWrite(RELAY_PINS[i], curr_state); // active-low relays
-                mqtt_pending_updates[i] = true;
-                mqtt_to_update[i] = !curr_state;
-                Serial.printf("Override: Switch [%s] %d\n", MQTT_TOPICS[i],
-                              !curr_state);
-            }
-        }
+        switch_debounce_time[i] = curr_time;
+        bool curr_state = digitalRead(SWITCH_PINS[i]);
+        // pullup so HIGH = OPEN, LOW = CLOSED
+
+        digitalWrite(RELAY_PINS[i], curr_state); // active-low relays
+        mqtt_pending_updates[i] = true;
+        mqtt_to_update[i] = !curr_state;
+        Serial.printf("Override: Switch [%s] %d\n", MQTT_TOPICS[i],
+                      !curr_state);
     }
 }
 
@@ -103,5 +112,36 @@ void sync_server() {
             client.publish(MQTT_TOPICS[i], payload);
             Serial.printf("MQTT Publish: [%s] %s\n", MQTT_TOPICS[i], payload);
         }
+    }
+}
+
+void check_reset() {
+    if (digitalRead(BOOT_BUTTON_PIN) == LOW) {
+        unsigned long start_time = millis();
+        while (digitalRead(BOOT_BUTTON_PIN) == LOW) {
+            digitalWrite(STATUS_LED, !digitalRead(STATUS_LED));
+            delay(100);
+
+            if (millis() - start_time > RESET_HOLD_TIME) {
+                Serial.println("\n----- FACTORY RESETTING -------\n");
+                WiFiManager wm;
+                wm.resetSettings();
+
+                prefs.begin("nestboard-cfg", false);
+                prefs.clear();
+                prefs.end();
+
+                digitalWrite(STATUS_LED, HIGH);
+                delay(300);
+                digitalWrite(STATUS_LED, LOW);
+                delay(500);
+                digitalWrite(STATUS_LED, HIGH);
+
+                Serial.println("\n -------- RESTARTING -------\n");
+                delay(3000);
+                ESP.restart();
+            }
+        }
+        digitalWrite(STATUS_LED, LOW);
     }
 }

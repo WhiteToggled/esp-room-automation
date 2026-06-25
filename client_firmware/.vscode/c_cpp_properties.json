@@ -10,6 +10,7 @@
             "includePath": [
                 "/mnt/shared/UET/4-Spring2026/coal/esp-room-automation/client_firmware/include",
                 "/mnt/shared/UET/4-Spring2026/coal/esp-room-automation/client_firmware/src",
+                "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                 "/mnt/shared/UET/4-Spring2026/coal/esp-room-automation/client_firmware/.pio/libdeps/esp32dev/WiFiManager",
                 "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/WebServer/src",
                 "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/FS/src",
@@ -229,7 +230,6 @@
                 "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/Insights/src",
                 "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/LittleFS/src",
                 "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/NetBIOS/src",
-                "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                 "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/RainMaker/src",
                 "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/SD/src",
                 "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/SD_MMC/src",
@@ -248,6 +248,7 @@
                 "path": [
                     "/mnt/shared/UET/4-Spring2026/coal/esp-room-automation/client_firmware/include",
                     "/mnt/shared/UET/4-Spring2026/coal/esp-room-automation/client_firmware/src",
+                    "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                     "/mnt/shared/UET/4-Spring2026/coal/esp-room-automation/client_firmware/.pio/libdeps/esp32dev/WiFiManager",
                     "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/WebServer/src",
                     "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/FS/src",
@@ -467,7 +468,6 @@
                     "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/Insights/src",
                     "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/LittleFS/src",
                     "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/NetBIOS/src",
-                    "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                     "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/RainMaker/src",
                     "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/SD/src",
                     "/home/whitetoggled/.platformio/packages/framework-arduinoespressif32/libraries/SD_MMC/src",
