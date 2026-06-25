@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
   ScrollView, StatusBar, Alert, ActivityIndicator,
@@ -6,7 +6,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
-import { COLORS, SPACING, RADIUS } from '../constants/theme';
+import { SPACING, RADIUS, ThemeColors } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 import { listUsers, createUser, deleteUser } from '../api/devices';
 
 interface BackendUser {
@@ -15,6 +16,74 @@ interface BackendUser {
   rooms: string[];
 }
 
+// ─── Appearance ────────────────────────────────────────────────────────────────
+
+const THEME_OPTIONS: { key: 'light' | 'dark' | 'system'; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { key: 'light', label: 'Light', icon: 'sunny-outline' },
+  { key: 'dark', label: 'Dark', icon: 'moon-outline' },
+  { key: 'system', label: 'System', icon: 'phone-portrait-outline' },
+];
+
+const AppearanceCard: React.FC = () => {
+  const { colors, preference, setPreference } = useTheme();
+  const ap = useMemo(() => createApStyles(colors), [colors]);
+
+  return (
+    <View style={ap.card}>
+      <View style={ap.cardHeader}>
+        <View style={ap.cardIconWrap}>
+          <Ionicons name="contrast-outline" size={18} color={colors.accent} />
+        </View>
+        <View>
+          <Text style={ap.cardTitle}>Appearance</Text>
+          <Text style={ap.cardSub}>Choose how Nestboard looks</Text>
+        </View>
+      </View>
+
+      <View style={ap.optionsRow}>
+        {THEME_OPTIONS.map((opt) => {
+          const active = preference === opt.key;
+          return (
+            <TouchableOpacity
+              key={opt.key}
+              style={[ap.option, active && ap.optionActive]}
+              onPress={() => setPreference(opt.key)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name={opt.icon} size={18} color={active ? colors.accent : colors.textMuted} />
+              <Text style={[ap.optionText, active && ap.optionTextActive]}>{opt.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+};
+
+const createApStyles = (colors: ThemeColors) => StyleSheet.create({
+  card: {
+    backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder,
+    borderRadius: RADIUS.lg, padding: SPACING.lg, marginBottom: SPACING.xl,
+  },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.lg, gap: SPACING.md },
+  cardIconWrap: {
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: 'rgba(255,122,0,0.12)', borderWidth: 1, borderColor: 'rgba(255,122,0,0.25)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  cardTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
+  cardSub:   { color: colors.textMuted, fontSize: 12, marginTop: 2 },
+  optionsRow: { flexDirection: 'row', gap: SPACING.sm },
+  option: {
+    flex: 1, alignItems: 'center', gap: 6, paddingVertical: SPACING.md,
+    borderRadius: RADIUS.md, borderWidth: 1, borderColor: colors.glassBorder,
+    backgroundColor: colors.surfaceLight,
+  },
+  optionActive: { borderColor: 'rgba(255,122,0,0.4)', backgroundColor: 'rgba(255,122,0,0.1)' },
+  optionText: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
+  optionTextActive: { color: colors.accent },
+});
+
 // ─── Create User Form ─────────────────────────────────────────────────────────
 
 interface CreateFormProps {
@@ -22,6 +91,8 @@ interface CreateFormProps {
 }
 
 const CreateUserForm: React.FC<CreateFormProps> = ({ onCreated }) => {
+  const { colors } = useTheme();
+  const cf = useMemo(() => createCfStyles(colors), [colors]);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -54,7 +125,7 @@ const CreateUserForm: React.FC<CreateFormProps> = ({ onCreated }) => {
     <View style={cf.card}>
       <View style={cf.cardHeader}>
         <View style={cf.cardIconWrap}>
-          <Ionicons name="person-add-outline" size={18} color={COLORS.accent} />
+          <Ionicons name="person-add-outline" size={18} color={colors.accent} />
         </View>
         <View>
           <Text style={cf.cardTitle}>Create User</Text>
@@ -66,11 +137,11 @@ const CreateUserForm: React.FC<CreateFormProps> = ({ onCreated }) => {
       <View style={cf.fieldGroup}>
         <Text style={cf.fieldLabel}>USERNAME</Text>
         <View style={[cf.inputWrap, !!error && cf.inputError]}>
-          <Ionicons name="at-outline" size={16} color={COLORS.textMuted} style={cf.inputIcon} />
+          <Ionicons name="at-outline" size={16} color={colors.textMuted} style={cf.inputIcon} />
           <TextInput
             style={cf.input}
             placeholder="e.g. john_doe"
-            placeholderTextColor={COLORS.textMuted}
+            placeholderTextColor={colors.textMuted}
             value={username}
             onChangeText={(t) => { setUsername(t); setError(''); setSuccess(''); }}
             autoCapitalize="none"
@@ -84,11 +155,11 @@ const CreateUserForm: React.FC<CreateFormProps> = ({ onCreated }) => {
       <View style={cf.fieldGroup}>
         <Text style={cf.fieldLabel}>PASSWORD</Text>
         <View style={[cf.inputWrap, !!error && cf.inputError]}>
-          <Ionicons name="lock-closed-outline" size={16} color={COLORS.textMuted} style={cf.inputIcon} />
+          <Ionicons name="lock-closed-outline" size={16} color={colors.textMuted} style={cf.inputIcon} />
           <TextInput
             style={cf.input}
             placeholder="Min. 4 characters"
-            placeholderTextColor={COLORS.textMuted}
+            placeholderTextColor={colors.textMuted}
             value={password}
             onChangeText={(t) => { setPassword(t); setError(''); setSuccess(''); }}
             secureTextEntry={!showPassword}
@@ -99,7 +170,7 @@ const CreateUserForm: React.FC<CreateFormProps> = ({ onCreated }) => {
             <Ionicons
               name={showPassword ? 'eye-off-outline' : 'eye-outline'}
               size={16}
-              color={COLORS.textMuted}
+              color={colors.textMuted}
             />
           </TouchableOpacity>
         </View>
@@ -114,7 +185,7 @@ const CreateUserForm: React.FC<CreateFormProps> = ({ onCreated }) => {
       )}
       {!!success && (
         <View style={[cf.feedbackRow, cf.successRow]}>
-          <Ionicons name="checkmark-circle-outline" size={13} color={COLORS.success} />
+          <Ionicons name="checkmark-circle-outline" size={13} color={colors.success} />
           <Text style={cf.successText}>{success}</Text>
         </View>
       )}
@@ -138,9 +209,9 @@ const CreateUserForm: React.FC<CreateFormProps> = ({ onCreated }) => {
   );
 };
 
-const cf = StyleSheet.create({
+const createCfStyles = (colors: ThemeColors) => StyleSheet.create({
   card: {
-    backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.glassBorder,
+    backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder,
     borderRadius: RADIUS.lg, padding: SPACING.lg, marginBottom: SPACING.xl,
   },
   cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.lg, gap: SPACING.md },
@@ -149,27 +220,27 @@ const cf = StyleSheet.create({
     backgroundColor: 'rgba(255,122,0,0.12)', borderWidth: 1, borderColor: 'rgba(255,122,0,0.25)',
     alignItems: 'center', justifyContent: 'center',
   },
-  cardTitle: { color: COLORS.text, fontSize: 15, fontWeight: '700' },
-  cardSub:   { color: COLORS.textMuted, fontSize: 12, marginTop: 2 },
+  cardTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
+  cardSub:   { color: colors.textMuted, fontSize: 12, marginTop: 2 },
   fieldGroup: { marginBottom: SPACING.md },
-  fieldLabel: { color: COLORS.textMuted, fontSize: 10, fontWeight: '700', letterSpacing: 1.2, marginBottom: SPACING.xs },
+  fieldLabel: { color: colors.textMuted, fontSize: 10, fontWeight: '700', letterSpacing: 1.2, marginBottom: SPACING.xs },
   inputWrap: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1, borderColor: COLORS.glassBorder,
+    borderWidth: 1, borderColor: colors.glassBorder,
     borderRadius: RADIUS.md, paddingHorizontal: SPACING.sm, height: 48,
   },
   inputError: { borderColor: 'rgba(255,77,77,0.5)' },
   inputIcon: { marginRight: SPACING.xs },
-  input: { flex: 1, color: COLORS.text, fontSize: 14 },
+  input: { flex: 1, color: colors.text, fontSize: 14 },
   eyeBtn: { padding: SPACING.xs },
   feedbackRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: SPACING.md },
   successRow: {},
   errorText:   { color: '#FF4D4D', fontSize: 12 },
-  successText: { color: COLORS.success, fontSize: 12 },
+  successText: { color: colors.success, fontSize: 12 },
   createBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm,
-    backgroundColor: COLORS.accent, borderRadius: RADIUS.md, height: 48, marginTop: SPACING.xs,
+    backgroundColor: colors.accent, borderRadius: RADIUS.md, height: 48, marginTop: SPACING.xs,
   },
   createBtnDisabled: { opacity: 0.6 },
   createBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
@@ -183,11 +254,15 @@ interface UserListProps {
   deleting: string | null;
 }
 
-const UserList: React.FC<UserListProps> = ({ users, onDelete, deleting }) => (
+const UserList: React.FC<UserListProps> = ({ users, onDelete, deleting }) => {
+  const { colors } = useTheme();
+  const ul = useMemo(() => createUlStyles(colors), [colors]);
+
+  return (
   <View style={ul.card}>
     <View style={ul.cardHeader}>
       <View style={ul.cardIconWrap}>
-        <Ionicons name="people-outline" size={18} color={COLORS.blue} />
+        <Ionicons name="people-outline" size={18} color={colors.blue} />
       </View>
       <View>
         <Text style={ul.cardTitle}>Manage Users</Text>
@@ -197,7 +272,7 @@ const UserList: React.FC<UserListProps> = ({ users, onDelete, deleting }) => (
 
     {users.length === 0 ? (
       <View style={ul.empty}>
-        <Ionicons name="person-outline" size={28} color={COLORS.textMuted} />
+        <Ionicons name="person-outline" size={28} color={colors.textMuted} />
         <Text style={ul.emptyText}>No users yet</Text>
       </View>
     ) : (
@@ -227,11 +302,12 @@ const UserList: React.FC<UserListProps> = ({ users, onDelete, deleting }) => (
       ))
     )}
   </View>
-);
+  );
+};
 
-const ul = StyleSheet.create({
+const createUlStyles = (colors: ThemeColors) => StyleSheet.create({
   card: {
-    backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.glassBorder,
+    backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder,
     borderRadius: RADIUS.lg, padding: SPACING.lg,
   },
   cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.lg, gap: SPACING.md },
@@ -240,10 +316,10 @@ const ul = StyleSheet.create({
     backgroundColor: 'rgba(96,165,250,0.12)', borderWidth: 1, borderColor: 'rgba(96,165,250,0.25)',
     alignItems: 'center', justifyContent: 'center',
   },
-  cardTitle: { color: COLORS.text, fontSize: 15, fontWeight: '700' },
-  cardSub:   { color: COLORS.textMuted, fontSize: 12, marginTop: 2 },
+  cardTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
+  cardSub:   { color: colors.textMuted, fontSize: 12, marginTop: 2 },
   empty: { alignItems: 'center', paddingVertical: SPACING.xl, gap: SPACING.sm },
-  emptyText: { color: COLORS.textMuted, fontSize: 13 },
+  emptyText: { color: colors.textMuted, fontSize: 13 },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: SPACING.md },
   rowBorder: { borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
   avatar: {
@@ -251,10 +327,10 @@ const ul = StyleSheet.create({
     backgroundColor: 'rgba(255,122,0,0.12)', borderWidth: 1, borderColor: 'rgba(255,122,0,0.25)',
     alignItems: 'center', justifyContent: 'center', marginRight: SPACING.md,
   },
-  avatarText: { color: COLORS.accent, fontSize: 13, fontWeight: '700' },
+  avatarText: { color: colors.accent, fontSize: 13, fontWeight: '700' },
   info: { flex: 1 },
-  username: { color: COLORS.text, fontSize: 14, fontWeight: '600' },
-  meta: { color: COLORS.textMuted, fontSize: 11, marginTop: 2 },
+  username: { color: colors.text, fontSize: 14, fontWeight: '600' },
+  meta: { color: colors.textMuted, fontSize: 11, marginTop: 2 },
   deleteBtn: {
     width: 34, height: 34, borderRadius: RADIUS.sm,
     backgroundColor: 'rgba(255,77,77,0.08)', borderWidth: 1, borderColor: 'rgba(255,77,77,0.22)',
@@ -270,6 +346,8 @@ interface SettingsScreenProps {
 }
 
 const SettingsScreen: React.FC<SettingsScreenProps> = ({ isActive, onUserChanged }) => {
+  const { colors, theme } = useTheme();
+  const s = useMemo(() => createStyles(colors), [colors]);
   const [users, setUsers] = useState<BackendUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -321,7 +399,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ isActive, onUserChanged
 
   return (
     <View style={s.root}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+      <StatusBar barStyle={theme === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={s.glowTR} />
 
       <SafeAreaView style={s.safe} edges={['top']}>
@@ -335,13 +413,16 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ isActive, onUserChanged
           showsVerticalScrollIndicator={false}
           contentContainerStyle={s.scrollBody}
         >
+          {/* Appearance section */}
+          <AppearanceCard />
+
           {/* Create user section — key resets form state when user navigates away */}
           <CreateUserForm key={formKey} onCreated={handleCreated} />
 
           {/* User list section */}
           {loadingUsers ? (
             <View style={s.loadingRow}>
-              <ActivityIndicator size="small" color={COLORS.accent} />
+              <ActivityIndicator size="small" color={colors.accent} />
               <Text style={s.loadingText}>Loading users…</Text>
             </View>
           ) : (
@@ -353,8 +434,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ isActive, onUserChanged
   );
 };
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.background },
   safe: { flex: 1 },
   glowTR: {
     position: 'absolute', top: -80, right: -80,
@@ -364,11 +445,11 @@ const s = StyleSheet.create({
   header: {
     paddingHorizontal: SPACING.xl, paddingTop: SPACING.xl, paddingBottom: SPACING.lg,
   },
-  title:    { color: COLORS.text, fontSize: 22, fontWeight: '700', letterSpacing: -0.5 },
-  subtitle: { color: COLORS.textMuted, fontSize: 13, marginTop: 2 },
+  title:    { color: colors.text, fontSize: 22, fontWeight: '700', letterSpacing: -0.5 },
+  subtitle: { color: colors.textMuted, fontSize: 13, marginTop: 2 },
   scrollBody: { paddingHorizontal: SPACING.xl, paddingBottom: 100 },
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, padding: SPACING.lg },
-  loadingText: { color: COLORS.textMuted, fontSize: 13 },
+  loadingText: { color: colors.textMuted, fontSize: 13 },
 });
 
 export default SettingsScreen;

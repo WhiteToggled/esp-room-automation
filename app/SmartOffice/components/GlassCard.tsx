@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
-import { COLORS, RADIUS } from '../constants/theme';
+import { RADIUS, ThemeColors } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 
 interface GlassCardProps {
   children: React.ReactNode;
@@ -9,6 +10,9 @@ interface GlassCardProps {
 }
 
 const GlassCard: React.FC<GlassCardProps> = ({ children, style, highlighted }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={[styles.card, highlighted && styles.highlighted, style]}>
       <View style={styles.innerHighlight} />
@@ -17,17 +21,17 @@ const GlassCard: React.FC<GlassCardProps> = ({ children, style, highlighted }) =
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   card: {
-    backgroundColor: COLORS.glass,
+    backgroundColor: colors.glass,
     borderRadius: RADIUS.lg,
     borderWidth: 1,
-    borderColor: COLORS.glassBorder,
+    borderColor: colors.glassBorder,
     overflow: 'hidden',
     position: 'relative',
   },
   highlighted: {
-    borderColor: COLORS.accentGlow,
+    borderColor: colors.accentGlow,
     backgroundColor: 'rgba(255,122,0,0.07)',
   },
   innerHighlight: {
@@ -36,7 +40,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 1,
-    backgroundColor: COLORS.glassHighlight,
+    backgroundColor: colors.glassHighlight,
   },
 });
 

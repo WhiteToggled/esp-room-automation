@@ -17,41 +17,54 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 
-import { COLORS, SPACING, RADIUS } from '../constants/theme';
+import { SPACING, RADIUS, ThemeColors } from '../constants/theme';
 import { Cabin, INITIAL_CABINS } from '../constants/cabinData';
 import * as devicesApi from '../api/devices';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import Header from '../components/Header';
 import CabinCard from '../components/CabinCard';
 import BottomNav, { TabName } from '../components/BottomNav';
 import MasterControl from '../components/MasterControl';
+import ExpandedCabinModal from '../components/ExpandedCabinModal';
 import AdminUsersScreen from './AdminUsersScreen';
 import SchedulesScreen from './SchedulesScreen';
 import SettingsScreen from './SettingsScreen';
-import AnalyticsScreen from './AnalyticsScreen';
+import LogsScreen from './LogsScreen';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const NUM_COLUMNS = 2;
 
 const TIMING = { duration: 280, easing: Easing.out(Easing.cubic) };
 
-// Tab order: Home=0, Schedules=1, Users=2, Settings=3
-const ADMIN_OFFSETS: Record<TabName, number> = { home: 0, schedules: 1, analytics: 2, users: 3, settings: 4 };
-const USER_OFFSETS:  Record<TabName, number> = { home: 0, schedules: 1, analytics: 0, users: 0, settings: 0 };
+// Tab order: Home=0, Schedules=1, Users=2, Settings=3, Logs=4
+const ADMIN_OFFSETS: Record<TabName, number> = { home: 0, schedules: 1, users: 2, settings: 3, logs: 4 };
+const USER_OFFSETS:  Record<TabName, number> = { home: 0, schedules: 1, users: 0, settings: 0, logs: 0 };
 const tabOffset = (tab: TabName, isAdmin: boolean): number =>
   (isAdmin ? ADMIN_OFFSETS : USER_OFFSETS)[tab];
 
 const HomeScreen: React.FC = () => {
   const { user, logout } = useAuth();
+  const { colors, theme } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [cabins, setCabins] = useState<Cabin[]>(INITIAL_CABINS);
   const [activeTab, setActiveTab] = useState<TabName>('home');
+  const [expandedCabinId, setExpandedCabinId] = useState<string | null>(null);
 
   const isAdmin = user?.role === 'admin';
   const [usersRefreshKey, setUsersRefreshKey] = useState(0);
 
+  // Other tabs only mount the first time they're visited (and then stay mounted) —
+  // on app open this avoids firing four screens' worth of fetches/renders at once
+  // for work the user isn't even looking at yet.
+  const [visitedTabs, setVisitedTabs] = useState<Set<TabName>>(() => new Set(['home']));
+  useEffect(() => {
+    setVisitedTabs((prev) => (prev.has(activeTab) ? prev : new Set(prev).add(activeTab)));
+  }, [activeTab]);
+
   // Ordered list of tabs visible to this user — used for swipe navigation
   const visibleTabs: TabName[] = isAdmin
-    ? ['home', 'schedules', 'analytics', 'users', 'settings']
+    ? ['home', 'schedules', 'users', 'settings', 'logs']
     : ['home', 'schedules'];
 
   const handleSwipe = useCallback((translationX: number) => {
@@ -104,8 +117,8 @@ const HomeScreen: React.FC = () => {
     transform: [{ translateX: (3 - offset.value) * SCREEN_WIDTH }],
   }));
 
-  // Settings: always position 4 (admin only)
-  const settingsAnimStyle = useAnimatedStyle(() => ({
+  // Logs: always position 4 (admin only)
+  const logsAnimStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: (4 - offset.value) * SCREEN_WIDTH }],
   }));
 
@@ -114,14 +127,31 @@ const HomeScreen: React.FC = () => {
     [cabins, isAdmin, user?.assignedCabinId]
   );
 
+  // Kept in sync with `cabins` so the toggle callbacks below can read current
+  // state (for the MQTT topic lookup) without depending on `cabins` directly —
+  // that keeps their identity stable across polls, which lets CabinCard skip
+  // re-rendering for every cabin except the one that actually changed.
+  const cabinsRef = useRef(cabins);
+  useEffect(() => { cabinsRef.current = cabins; }, [cabins]);
+
+  // Maps every cabin through `updater`, but reuses the previous cabin object
+  // (and the previous array, if nothing changed at all) wherever the updater
+  // reports no change — so polling that finds nothing new triggers zero re-renders.
+  const applyCabinUpdate = useCallback((updater: (c: Cabin) => Cabin) => {
+    setCabins((prev) => {
+      let changed = false;
+      const next = prev.map((c) => {
+        const updated = updater(c);
+        if (updated !== c) changed = true;
+        return updated;
+      });
+      return changed ? next : prev;
+    });
+  }, []);
+
   const toggleLight = useCallback((cabinId: string) => {
-    setCabins((prev) =>
-      prev.map((c) =>
-        c.id === cabinId ? { ...c, light: { ...c.light, isOn: !c.light.isOn } } : c
-      )
-    );
-    const cabin = cabins.find((c) => c.id === cabinId);
-    const topic = cabin?.light.topic;
+    applyCabinUpdate((c) => (c.id === cabinId ? { ...c, light: { ...c.light, isOn: !c.light.isOn } } : c));
+    const topic = cabinsRef.current.find((c) => c.id === cabinId)?.light.topic;
     if (topic) {
       devicesApi.toggle(topic).catch(async () => {
         try {
@@ -130,16 +160,11 @@ const HomeScreen: React.FC = () => {
         } catch (_) {}
       });
     }
-  }, [cabins]);
+  }, [applyCabinUpdate]);
 
   const toggleFan = useCallback((cabinId: string) => {
-    setCabins((prev) =>
-      prev.map((c) =>
-        c.id === cabinId ? { ...c, fan: { ...c.fan, isOn: !c.fan.isOn } } : c
-      )
-    );
-    const cabin = cabins.find((c) => c.id === cabinId);
-    const topic = cabin?.fan.topic;
+    applyCabinUpdate((c) => (c.id === cabinId ? { ...c, fan: { ...c.fan, isOn: !c.fan.isOn } } : c));
+    const topic = cabinsRef.current.find((c) => c.id === cabinId)?.fan.topic;
     if (topic) {
       devicesApi.toggle(topic).catch(async () => {
         try {
@@ -148,48 +173,50 @@ const HomeScreen: React.FC = () => {
         } catch (_) {}
       });
     }
-  }, [cabins]);
+  }, [applyCabinUpdate]);
 
   const allLightsOn = useCallback(() => {
-    setCabins((prev) => prev.map((c) => ({ ...c, light: { ...c.light, isOn: true } })));
+    applyCabinUpdate((c) => (c.light.isOn ? c : { ...c, light: { ...c.light, isOn: true } }));
     devicesApi.getStates().then(reconcileStates).catch(() => {});
-  }, []);
+  }, [applyCabinUpdate]);
 
   const allFansOn = useCallback(() => {
-    setCabins((prev) => prev.map((c) => ({ ...c, fan: { ...c.fan, isOn: true } })));
+    applyCabinUpdate((c) => (c.fan.isOn ? c : { ...c, fan: { ...c.fan, isOn: true } }));
     devicesApi.getStates().then(reconcileStates).catch(() => {});
-  }, []);
+  }, [applyCabinUpdate]);
 
   const allOff = useCallback(() => {
-    setCabins((prev) =>
-      prev.map((c) => ({
-        ...c,
-        light: { ...c.light, isOn: false },
-        fan: { ...c.fan, isOn: false },
-      }))
+    applyCabinUpdate((c) =>
+      !c.light.isOn && !c.fan.isOn
+        ? c
+        : { ...c, light: { ...c.light, isOn: false }, fan: { ...c.fan, isOn: false } }
     );
     devicesApi.getStates().then(reconcileStates).catch(() => {});
-  }, []);
+  }, [applyCabinUpdate]);
 
   const reconcileStates = useCallback((states: Record<string, number>) => {
-    setCabins((prev) =>
-      prev.map((c) => ({
-        ...c,
-        light: { ...c.light, isOn: c.light.topic ? Boolean(states[c.light.topic]) : c.light.isOn },
-        fan: { ...c.fan, isOn: c.fan.topic ? Boolean(states[c.fan.topic]) : c.fan.isOn },
-      }))
-    );
-  }, []);
+    applyCabinUpdate((c) => {
+      const lightOn = c.light.topic ? Boolean(states[c.light.topic]) : c.light.isOn;
+      const fanOn = c.fan.topic ? Boolean(states[c.fan.topic]) : c.fan.isOn;
+      if (lightOn === c.light.isOn && fanOn === c.fan.isOn) return c;
+      return { ...c, light: { ...c.light, isOn: lightOn }, fan: { ...c.fan, isOn: fanOn } };
+    });
+  }, [applyCabinUpdate]);
 
   useEffect(() => {
     let mounted = true;
-    (async () => {
+
+    const fetchAndReconcile = async () => {
       try {
         const states = await devicesApi.getStates();
         if (mounted) reconcileStates(states as Record<string, number>);
       } catch (_) {}
-    })();
-    return () => { mounted = false; };
+    };
+
+    fetchAndReconcile();
+    const interval = setInterval(fetchAndReconcile, 5000);
+
+    return () => { mounted = false; clearInterval(interval); };
   }, [reconcileStates]);
 
   const activeDevices = visibleCabins.reduce(
@@ -198,12 +225,15 @@ const HomeScreen: React.FC = () => {
   );
   const totalDevices = visibleCabins.length * 2;
 
-  const renderCabin = ({ item }: { item: Cabin }) => (
+  const expandedCabin = cabins.find((c) => c.id === expandedCabinId) ?? null;
+
+  const renderCabin = ({ item, index }: { item: Cabin; index: number }) => (
     <CabinCard
       cabin={item}
-      onToggleLight={() => toggleLight(item.id)}
-      onToggleFan={() => toggleFan(item.id)}
-      onPress={() => {}}
+      index={index}
+      onToggleLight={toggleLight}
+      onToggleFan={toggleFan}
+      onExpand={setExpandedCabinId}
     />
   );
 
@@ -211,7 +241,7 @@ const HomeScreen: React.FC = () => {
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+      <StatusBar barStyle={theme === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={styles.glowTopLeft} />
       <View style={styles.glowBottomRight} />
 
@@ -235,7 +265,7 @@ const HomeScreen: React.FC = () => {
             {hasNoCabin ? (
               <View style={styles.noCabin}>
                 <View style={styles.noCabinIcon}>
-                  <Ionicons name="time-outline" size={36} color={COLORS.textMuted} />
+                  <Ionicons name="time-outline" size={36} color={colors.textMuted} />
                 </View>
                 <Text style={styles.noCabinTitle}>Awaiting Assignment</Text>
                 <Text style={styles.noCabinSubtitle}>
@@ -243,8 +273,8 @@ const HomeScreen: React.FC = () => {
                   Please contact the admin.
                 </Text>
                 <View style={styles.noCabinHint}>
-                  <Ionicons name="person-outline" size={13} color={COLORS.accent} />
-                  <Text style={styles.noCabinHintText}>admin@smartoffice.com</Text>
+                  <Ionicons name="person-outline" size={13} color={colors.accent} />
+                  <Text style={styles.noCabinHintText}>admin@nestboard.com</Text>
                 </View>
               </View>
             ) : (
@@ -275,7 +305,7 @@ const HomeScreen: React.FC = () => {
           style={[StyleSheet.absoluteFill, schedulesAnimStyle]}
           pointerEvents={activeTab === 'schedules' ? 'auto' : 'none'}
         >
-          <SchedulesScreen />
+          {visitedTabs.has('schedules') && <SchedulesScreen />}
         </Animated.View>
 
         {/* Users tab (admin only) */}
@@ -284,7 +314,7 @@ const HomeScreen: React.FC = () => {
             style={[StyleSheet.absoluteFill, usersAnimStyle]}
             pointerEvents={activeTab === 'users' ? 'auto' : 'none'}
           >
-            <AdminUsersScreen refreshKey={usersRefreshKey} />
+            {visitedTabs.has('users') && <AdminUsersScreen refreshKey={usersRefreshKey} />}
           </Animated.View>
         )}
 
@@ -294,10 +324,22 @@ const HomeScreen: React.FC = () => {
             style={[StyleSheet.absoluteFill, settingsAnimStyle]}
             pointerEvents={activeTab === 'settings' ? 'auto' : 'none'}
           >
-            <SettingsScreen
-              isActive={activeTab === 'settings'}
-              onUserChanged={() => setUsersRefreshKey((k) => k + 1)}
-            />
+            {visitedTabs.has('settings') && (
+              <SettingsScreen
+                isActive={activeTab === 'settings'}
+                onUserChanged={() => setUsersRefreshKey((k) => k + 1)}
+              />
+            )}
+          </Animated.View>
+        )}
+
+        {/* Logs tab (admin only) */}
+        {isAdmin && (
+          <Animated.View
+            style={[StyleSheet.absoluteFill, logsAnimStyle]}
+            pointerEvents={activeTab === 'logs' ? 'auto' : 'none'}
+          >
+            {visitedTabs.has('logs') && <LogsScreen isActive={activeTab === 'logs'} />}
           </Animated.View>
         )}
 
@@ -317,12 +359,19 @@ const HomeScreen: React.FC = () => {
         <BottomNav activeTab={activeTab} isAdmin={isAdmin} onTabChange={setActiveTab} />
 
       </SafeAreaView>
+
+      <ExpandedCabinModal
+        cabin={expandedCabin}
+        onClose={() => setExpandedCabinId(null)}
+        onToggleLight={() => expandedCabin && toggleLight(expandedCabin.id)}
+        onToggleFan={() => expandedCabin && toggleFan(expandedCabin.id)}
+      />
     </View>
   );
 };
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.background },
   pages: { flex: 1, overflow: 'hidden' },
   safeArea: { flex: 1 },
   glowTopLeft: {
@@ -347,17 +396,17 @@ const styles = StyleSheet.create({
   },
   noCabinIcon: {
     width: 80, height: 80, borderRadius: 40,
-    backgroundColor: COLORS.glass,
-    borderWidth: 1, borderColor: COLORS.glassBorder,
+    backgroundColor: colors.glass,
+    borderWidth: 1, borderColor: colors.glassBorder,
     alignItems: 'center', justifyContent: 'center',
     marginBottom: SPACING.lg,
   },
   noCabinTitle: {
-    color: COLORS.text, fontSize: 20, fontWeight: '700',
+    color: colors.text, fontSize: 20, fontWeight: '700',
     letterSpacing: -0.4, marginBottom: SPACING.sm,
   },
   noCabinSubtitle: {
-    color: COLORS.textMuted, fontSize: 14, textAlign: 'center',
+    color: colors.textMuted, fontSize: 14, textAlign: 'center',
     lineHeight: 22, marginBottom: SPACING.lg,
   },
   noCabinHint: {
@@ -366,7 +415,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,122,0,0.2)',
     borderRadius: RADIUS.full, paddingHorizontal: SPACING.md, paddingVertical: 8,
   },
-  noCabinHintText: { color: COLORS.accent, fontSize: 13, fontWeight: '500', marginLeft: SPACING.xs },
+  noCabinHintText: { color: colors.accent, fontSize: 13, fontWeight: '500', marginLeft: SPACING.xs },
 });
 
 export default HomeScreen;

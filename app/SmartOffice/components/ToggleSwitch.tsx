@@ -5,7 +5,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { COLORS } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 
 interface ToggleSwitchProps {
   isOn: boolean;
@@ -14,6 +14,7 @@ interface ToggleSwitchProps {
 }
 
 const ToggleSwitch: React.FC<ToggleSwitchProps> = ({ isOn, onToggle, size = 'md' }) => {
+  const { colors } = useTheme();
   const translateX = useRef(new Animated.Value(isOn ? 1 : 0)).current;
   const bgOpacity = useRef(new Animated.Value(isOn ? 1 : 0)).current;
   const thumbScale = useRef(new Animated.Value(1)).current;
@@ -50,7 +51,7 @@ const ToggleSwitch: React.FC<ToggleSwitchProps> = ({ isOn, onToggle, size = 'md'
 
   const bgColor = bgOpacity.interpolate({
     inputRange: [0, 1],
-    outputRange: [COLORS.toggleOff, COLORS.accent],
+    outputRange: [colors.toggleOff, colors.accent],
   });
 
   return (

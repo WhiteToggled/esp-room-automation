@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, SPACING } from '../constants/theme';
+import { SPACING, ThemeColors } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
+import AcknowledgementsModal from './AcknowledgementsModal';
 
 interface HeaderProps {
   activeDevices: number;
@@ -18,6 +21,11 @@ const Header: React.FC<HeaderProps> = ({
   cabinCount = 8,
   onLogout,
 }) => {
+  const { colors, theme, toggleTheme } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const [ackVisible, setAckVisible] = useState(false);
+  const insets = useSafeAreaInsets();
+
   return (
     <View style={styles.container}>
       <View style={styles.topRow}>
@@ -29,13 +37,23 @@ const Header: React.FC<HeaderProps> = ({
         </View>
 
         <View style={styles.actions}>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => setAckVisible(true)} activeOpacity={0.7}>
+            <Ionicons name="information-circle-outline" size={22} color={colors.textSecondary} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconBtn} onPress={toggleTheme} activeOpacity={0.7}>
+            <Ionicons
+              name={theme === 'dark' ? 'sunny-outline' : 'moon-outline'}
+              size={20}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
           {onLogout ? (
-            <TouchableOpacity style={styles.iconBtn} onPress={onLogout}>
-              <Ionicons name="log-out-outline" size={22} color={COLORS.textSecondary} />
+            <TouchableOpacity style={styles.iconBtn} onPress={onLogout} activeOpacity={0.7}>
+              <Ionicons name="log-out-outline" size={22} color={colors.textSecondary} />
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity style={styles.iconBtn}>
-              <Ionicons name="person-circle-outline" size={22} color={COLORS.textSecondary} />
+            <TouchableOpacity style={styles.iconBtn} activeOpacity={0.7}>
+              <Ionicons name="person-circle-outline" size={22} color={colors.textSecondary} />
             </TouchableOpacity>
           )}
         </View>
@@ -51,15 +69,17 @@ const Header: React.FC<HeaderProps> = ({
         </View>
 
         <View style={styles.statChip}>
-          <Ionicons name="grid-outline" size={12} color={COLORS.textMuted} />
+          <Ionicons name="grid-outline" size={12} color={colors.textMuted} />
           <Text style={styles.statText}>{cabinCount} Cabin{cabinCount !== 1 ? 's' : ''}</Text>
         </View>
       </View>
+
+      <AcknowledgementsModal visible={ackVisible} onClose={() => setAckVisible(false)} insets={insets} />
     </View>
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.xl,
@@ -74,14 +94,14 @@ const styles = StyleSheet.create({
   },
 
   greeting: {
-    color: COLORS.text,
+    color: colors.text,
     fontSize: 26,
     fontWeight: '700',
     letterSpacing: -0.8,
   },
 
   subtitle: {
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     fontSize: 14,
     fontWeight: '300',
     marginTop: 2,
@@ -95,9 +115,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: COLORS.glass,
+    backgroundColor: colors.glass,
     borderWidth: 1,
-    borderColor: COLORS.glassBorder,
+    borderColor: colors.glassBorder,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: SPACING.sm,
@@ -112,9 +132,9 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.glass,
+    backgroundColor: colors.glass,
     borderWidth: 1,
-    borderColor: COLORS.glassBorder,
+    borderColor: colors.glassBorder,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 8,
     borderRadius: 10,
@@ -125,12 +145,12 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: COLORS.accent,
+    backgroundColor: colors.accent,
     marginRight: SPACING.xs,
   },
 
   statText: {
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     fontSize: 11,
     fontWeight: '500',
   },

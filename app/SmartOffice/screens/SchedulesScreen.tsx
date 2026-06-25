@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   Modal, ScrollView, StatusBar, Alert,
@@ -6,8 +6,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
-import { COLORS, SPACING, RADIUS } from '../constants/theme';
+import { SPACING, RADIUS, ThemeColors } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 import ToggleSwitch from '../components/ToggleSwitch';
+import FadeInView from '../components/FadeInView';
 import * as api from '../api/devices';
 import { Schedule, ScheduleCreate } from '../api/devices';
 import { useAuth } from '../context/AuthContext';
@@ -45,6 +47,34 @@ const formatTime = (h: number, m: number) => {
   return `${String(hour).padStart(2, '0')}:${String(m).padStart(2, '0')} ${period}`;
 };
 
+// Press-and-hold support for the time steppers: one immediate step on tap, then
+// repeats continuously while held until release.
+const HOLD_DELAY = 350;
+const HOLD_INTERVAL = 90;
+
+const useHoldRepeat = (onStep: () => void) => {
+  const stepRef = useRef(onStep);
+  stepRef.current = onStep;
+  const timeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const interval = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stop = useCallback(() => {
+    if (timeout.current) { clearTimeout(timeout.current); timeout.current = null; }
+    if (interval.current) { clearInterval(interval.current); interval.current = null; }
+  }, []);
+
+  const start = useCallback(() => {
+    stepRef.current();
+    timeout.current = setTimeout(() => {
+      interval.current = setInterval(() => stepRef.current(), HOLD_INTERVAL);
+    }, HOLD_DELAY);
+  }, []);
+
+  useEffect(() => () => stop(), [stop]);
+
+  return { onPressIn: start, onPressOut: stop };
+};
+
 // ─── Schedule Form Modal ──────────────────────────────────────────────────────
 
 interface ScheduleFormProps {
@@ -59,6 +89,8 @@ interface ScheduleFormProps {
 const ScheduleFormModal: React.FC<ScheduleFormProps> = ({
   visible, initial, editId, availableDevices, onSave, onClose,
 }) => {
+  const { colors } = useTheme();
+  const fm = useMemo(() => createFmStyles(colors), [colors]);
   const [form, setForm] = useState<ScheduleCreate>(initial);
   const [deviceExpanded, setDeviceExpanded] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -73,6 +105,10 @@ const ScheduleFormModal: React.FC<ScheduleFormProps> = ({
 
   const adjHour = (d: number) => setForm((f) => ({ ...f, hour: (f.hour + d + 24) % 24 }));
   const adjMin  = (d: number) => setForm((f) => ({ ...f, minute: (f.minute + d + 60) % 60 }));
+  const hourUp = useHoldRepeat(() => adjHour(1));
+  const hourDown = useHoldRepeat(() => adjHour(-1));
+  const minUp = useHoldRepeat(() => adjMin(1));
+  const minDown = useHoldRepeat(() => adjMin(-1));
   const toggleDay = (day: string) =>
     setForm((f) => ({
       ...f,
@@ -103,7 +139,7 @@ const ScheduleFormModal: React.FC<ScheduleFormProps> = ({
               <Text style={fm.subtitle}>{editId ? 'Update automation settings' : 'Set up a new automation'}</Text>
             </View>
             <TouchableOpacity style={fm.closeBtn} onPress={onClose}>
-              <Ionicons name="close" size={18} color={COLORS.textSecondary} />
+              <Ionicons name="close" size={18} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -125,7 +161,7 @@ const ScheduleFormModal: React.FC<ScheduleFormProps> = ({
                 <Ionicons
                   name={isLight ? 'bulb-outline' : 'sync-outline'}
                   size={16}
-                  color={isLight ? COLORS.accent : COLORS.blue}
+                  color={isLight ? colors.accent : colors.blue}
                 />
               </View>
               <View style={{ flex: 1 }}>
@@ -135,7 +171,7 @@ const ScheduleFormModal: React.FC<ScheduleFormProps> = ({
               <Ionicons
                 name={deviceExpanded ? 'chevron-up' : 'chevron-down'}
                 size={16}
-                color={COLORS.textMuted}
+                color={colors.textMuted}
               />
             </TouchableOpacity>
 
@@ -156,7 +192,7 @@ const ScheduleFormModal: React.FC<ScheduleFormProps> = ({
                         <Ionicons
                           name={light ? 'bulb-outline' : 'sync-outline'}
                           size={13}
-                          color={light ? COLORS.accent : COLORS.blue}
+                          color={light ? colors.accent : colors.blue}
                         />
                       </View>
                       <View style={{ flex: 1 }}>
@@ -165,7 +201,7 @@ const ScheduleFormModal: React.FC<ScheduleFormProps> = ({
                         </Text>
                         <Text style={fm.deviceOptionId}>{id}</Text>
                       </View>
-                      {active && <Ionicons name="checkmark-circle" size={16} color={COLORS.accent} />}
+                      {active && <Ionicons name="checkmark-circle" size={16} color={colors.accent} />}
                     </TouchableOpacity>
                   );
                 })}
@@ -176,22 +212,22 @@ const ScheduleFormModal: React.FC<ScheduleFormProps> = ({
             <Text style={[fm.label, { marginTop: SPACING.xl }]}>TIME</Text>
             <View style={fm.timeCard}>
               <View style={fm.timeUnit}>
-                <TouchableOpacity style={fm.timeArrow} onPress={() => adjHour(1)}>
-                  <Ionicons name="chevron-up" size={22} color={COLORS.accent} />
+                <TouchableOpacity style={fm.timeArrow} {...hourUp} activeOpacity={0.6}>
+                  <Ionicons name="chevron-up" size={22} color={colors.accent} />
                 </TouchableOpacity>
                 <Text style={fm.timeDigit}>{String(form.hour).padStart(2, '0')}</Text>
-                <TouchableOpacity style={fm.timeArrow} onPress={() => adjHour(-1)}>
-                  <Ionicons name="chevron-down" size={22} color={COLORS.accent} />
+                <TouchableOpacity style={fm.timeArrow} {...hourDown} activeOpacity={0.6}>
+                  <Ionicons name="chevron-down" size={22} color={colors.accent} />
                 </TouchableOpacity>
               </View>
               <Text style={fm.timeSep}>:</Text>
               <View style={fm.timeUnit}>
-                <TouchableOpacity style={fm.timeArrow} onPress={() => adjMin(5)}>
-                  <Ionicons name="chevron-up" size={22} color={COLORS.accent} />
+                <TouchableOpacity style={fm.timeArrow} {...minUp} activeOpacity={0.6}>
+                  <Ionicons name="chevron-up" size={22} color={colors.accent} />
                 </TouchableOpacity>
                 <Text style={fm.timeDigit}>{String(form.minute).padStart(2, '0')}</Text>
-                <TouchableOpacity style={fm.timeArrow} onPress={() => adjMin(-5)}>
-                  <Ionicons name="chevron-down" size={22} color={COLORS.accent} />
+                <TouchableOpacity style={fm.timeArrow} {...minDown} activeOpacity={0.6}>
+                  <Ionicons name="chevron-down" size={22} color={colors.accent} />
                 </TouchableOpacity>
               </View>
               <View style={fm.periodBox}>
@@ -229,11 +265,11 @@ const ScheduleFormModal: React.FC<ScheduleFormProps> = ({
                 activeOpacity={0.75}
               >
                 <View style={[fm.actionIcon, form.action === 1 && fm.actionIconOn]}>
-                  <Ionicons name="power" size={15} color={form.action === 1 ? COLORS.accent : COLORS.textMuted} />
+                  <Ionicons name="power" size={15} color={form.action === 1 ? colors.accent : colors.textMuted} />
                 </View>
                 <Text style={[fm.actionText, form.action === 1 && fm.actionTextOn]}>Turn ON</Text>
                 {form.action === 1 && (
-                  <Ionicons name="checkmark-circle" size={15} color={COLORS.accent} style={{ marginLeft: 'auto' }} />
+                  <Ionicons name="checkmark-circle" size={15} color={colors.accent} style={{ marginLeft: 'auto' }} />
                 )}
               </TouchableOpacity>
 
@@ -243,7 +279,7 @@ const ScheduleFormModal: React.FC<ScheduleFormProps> = ({
                 activeOpacity={0.75}
               >
                 <View style={[fm.actionIcon, form.action === 0 && fm.actionIconOff]}>
-                  <Ionicons name="power-outline" size={15} color={form.action === 0 ? '#FF4D4D' : COLORS.textMuted} />
+                  <Ionicons name="power-outline" size={15} color={form.action === 0 ? '#FF4D4D' : colors.textMuted} />
                 </View>
                 <Text style={[fm.actionText, form.action === 0 && fm.actionTextOff]}>Turn OFF</Text>
                 {form.action === 0 && (
@@ -288,15 +324,15 @@ const ScheduleFormModal: React.FC<ScheduleFormProps> = ({
   );
 };
 
-const fm = StyleSheet.create({
+const createFmStyles = (colors: ThemeColors) => StyleSheet.create({
   overlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl,
     borderTopWidth: 1, borderLeftWidth: 1, borderRightWidth: 1,
-    borderColor: COLORS.glassBorder,
+    borderColor: colors.glassBorder,
     maxHeight: '90%',
   },
   handle: {
@@ -307,30 +343,30 @@ const fm = StyleSheet.create({
   header: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
     paddingHorizontal: SPACING.xl, paddingTop: SPACING.md, paddingBottom: SPACING.lg,
-    borderBottomWidth: 1, borderBottomColor: COLORS.glassBorder,
+    borderBottomWidth: 1, borderBottomColor: colors.glassBorder,
   },
-  title: { color: COLORS.text, fontSize: 18, fontWeight: '700' },
-  subtitle: { color: COLORS.textMuted, fontSize: 12, marginTop: 3 },
+  title: { color: colors.text, fontSize: 18, fontWeight: '700' },
+  subtitle: { color: colors.textMuted, fontSize: 12, marginTop: 3 },
   closeBtn: {
     width: 32, height: 32, borderRadius: 10,
-    backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.glassBorder,
+    backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder,
     alignItems: 'center', justifyContent: 'center',
   },
   // ScrollView body - no flex:1, driven by content up to sheet's maxHeight
   body: { padding: SPACING.xl, paddingBottom: 48 },
   label: {
-    color: COLORS.textMuted, fontSize: 10, fontWeight: '700',
+    color: colors.textMuted, fontSize: 10, fontWeight: '700',
     letterSpacing: 1.4, marginBottom: SPACING.sm,
   },
   // Device field
   deviceField: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.glassBorder,
+    backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder,
     borderRadius: RADIUS.md, padding: SPACING.md,
   },
   deviceFieldOpen: {
     borderBottomLeftRadius: 0, borderBottomRightRadius: 0,
-    borderColor: COLORS.accentGlow,
+    borderColor: colors.accentGlow,
   },
   deviceIcon: {
     width: 38, height: 38, borderRadius: 11,
@@ -339,12 +375,12 @@ const fm = StyleSheet.create({
   },
   iconLight: { backgroundColor: 'rgba(255,122,0,0.12)', borderColor: 'rgba(255,122,0,0.25)' },
   iconFan:   { backgroundColor: 'rgba(96,165,250,0.12)', borderColor: 'rgba(96,165,250,0.25)' },
-  deviceName: { color: COLORS.text, fontSize: 14, fontWeight: '600' },
-  deviceSub:  { color: COLORS.textMuted, fontSize: 11, marginTop: 2 },
+  deviceName: { color: colors.text, fontSize: 14, fontWeight: '600' },
+  deviceSub:  { color: colors.textMuted, fontSize: 11, marginTop: 2 },
   // Inline device list
   deviceList: {
-    backgroundColor: COLORS.surfaceLight,
-    borderWidth: 1, borderTopWidth: 0, borderColor: COLORS.accentGlow,
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 1, borderTopWidth: 0, borderColor: colors.accentGlow,
     borderBottomLeftRadius: RADIUS.md, borderBottomRightRadius: RADIUS.md,
     paddingVertical: SPACING.xs, marginBottom: SPACING.sm,
   },
@@ -359,45 +395,45 @@ const fm = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     marginRight: SPACING.sm, borderWidth: 1,
   },
-  deviceOptionName:       { color: COLORS.textSecondary, fontSize: 13, fontWeight: '500' },
-  deviceOptionNameActive: { color: COLORS.text, fontWeight: '600' },
-  deviceOptionId:         { color: COLORS.textMuted, fontSize: 10, marginTop: 1 },
+  deviceOptionName:       { color: colors.textSecondary, fontSize: 13, fontWeight: '500' },
+  deviceOptionNameActive: { color: colors.text, fontWeight: '600' },
+  deviceOptionId:         { color: colors.textMuted, fontSize: 10, marginTop: 1 },
   // Time picker
   timeCard: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.glassBorder,
+    backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder,
     borderRadius: RADIUS.md, paddingVertical: SPACING.md, paddingHorizontal: SPACING.xl,
   },
   timeUnit:  { alignItems: 'center', minWidth: 72 },
   timeArrow: { width: 44, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: RADIUS.sm },
-  timeDigit: { color: COLORS.text, fontSize: 40, fontWeight: '700', letterSpacing: -1 },
-  timeSep:   { color: COLORS.accent, fontSize: 36, fontWeight: '700', marginHorizontal: SPACING.sm, marginBottom: 4 },
+  timeDigit: { color: colors.text, fontSize: 40, fontWeight: '700', letterSpacing: -1 },
+  timeSep:   { color: colors.accent, fontSize: 36, fontWeight: '700', marginHorizontal: SPACING.sm, marginBottom: 4 },
   periodBox:  { alignItems: 'center', marginLeft: SPACING.lg },
-  periodMain: { color: COLORS.accent, fontSize: 18, fontWeight: '700' },
-  period24:   { color: COLORS.textMuted, fontSize: 11, marginTop: 4 },
+  periodMain: { color: colors.accent, fontSize: 18, fontWeight: '700' },
+  period24:   { color: colors.textMuted, fontSize: 11, marginTop: 4 },
   // Days
   daysRow:         { flexDirection: 'row', justifyContent: 'space-between' },
-  dayChip:         { flex: 1, marginHorizontal: 3, aspectRatio: 1, maxWidth: 42, borderRadius: RADIUS.full, backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.glassBorder, alignItems: 'center', justifyContent: 'center' },
+  dayChip:         { flex: 1, marginHorizontal: 3, aspectRatio: 1, maxWidth: 42, borderRadius: RADIUS.full, backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder, alignItems: 'center', justifyContent: 'center' },
   dayChipActive:   { backgroundColor: 'rgba(255,122,0,0.15)', borderColor: 'rgba(255,122,0,0.45)' },
-  dayChipText:     { color: COLORS.textMuted, fontSize: 12, fontWeight: '700' },
-  dayChipTextActive: { color: COLORS.accent },
+  dayChipText:     { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
+  dayChipTextActive: { color: colors.accent },
   // Action
   actionRow:    { flexDirection: 'row', gap: SPACING.sm },
-  actionBtn:    { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.glassBorder, borderRadius: RADIUS.md, padding: SPACING.md, gap: SPACING.sm },
+  actionBtn:    { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder, borderRadius: RADIUS.md, padding: SPACING.md, gap: SPACING.sm },
   actionBtnOn:  { backgroundColor: 'rgba(255,122,0,0.10)', borderColor: 'rgba(255,122,0,0.35)' },
   actionBtnOff: { backgroundColor: 'rgba(255,77,77,0.08)',  borderColor: 'rgba(255,77,77,0.30)'  },
   actionIcon:    { width: 30, height: 30, borderRadius: 9, backgroundColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center' },
   actionIconOn:  { backgroundColor: 'rgba(255,122,0,0.15)' },
   actionIconOff: { backgroundColor: 'rgba(255,77,77,0.12)' },
-  actionText:    { color: COLORS.textMuted, fontSize: 13, fontWeight: '600' },
-  actionTextOn:  { color: COLORS.accent },
+  actionText:    { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
+  actionTextOn:  { color: colors.accent },
   actionTextOff: { color: '#FF4D4D' },
   // Enabled row
-  enabledRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.glassBorder, borderRadius: RADIUS.md, padding: SPACING.md },
-  enabledLabel: { color: COLORS.text, fontSize: 14, fontWeight: '600' },
-  enabledSub:   { color: COLORS.textMuted, fontSize: 11, marginTop: 3 },
+  enabledRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder, borderRadius: RADIUS.md, padding: SPACING.md },
+  enabledLabel: { color: colors.text, fontSize: 14, fontWeight: '600' },
+  enabledSub:   { color: colors.textMuted, fontSize: 11, marginTop: 3 },
   // Save button
-  saveBtn:         { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm, backgroundColor: COLORS.accent, borderRadius: RADIUS.md, height: 52, marginTop: SPACING.xl },
+  saveBtn:         { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm, backgroundColor: colors.accent, borderRadius: RADIUS.md, height: 52, marginTop: SPACING.xl },
   saveBtnDisabled: { opacity: 0.6 },
   saveBtnText:     { color: '#fff', fontSize: 15, fontWeight: '700' },
 });
@@ -406,16 +442,20 @@ const fm = StyleSheet.create({
 
 interface ScheduleCardProps {
   schedule: Schedule;
+  index: number;
   onEdit: () => void;
   onDelete: () => void;
   onToggleEnabled: (v: boolean) => void;
 }
 
-const ScheduleCard: React.FC<ScheduleCardProps> = ({ schedule, onEdit, onDelete, onToggleEnabled }) => {
+const ScheduleCard: React.FC<ScheduleCardProps> = ({ schedule, index, onEdit, onDelete, onToggleEnabled }) => {
+  const { colors } = useTheme();
+  const sc = useMemo(() => createScStyles(colors), [colors]);
   const isLight = schedule.device_id.includes('/l');
   const isOn = schedule.action === 1;
 
   return (
+    <FadeInView delay={Math.min(index, 8) * 50} distance={12}>
     <View style={[sc.card, !schedule.enabled && sc.cardDisabled]}>
       {/* Row 1: time + enabled toggle */}
       <View style={sc.row1}>
@@ -424,7 +464,7 @@ const ScheduleCard: React.FC<ScheduleCardProps> = ({ schedule, onEdit, onDelete,
             {formatTime(schedule.hour, schedule.minute)}
           </Text>
           <View style={[sc.badge, isOn ? sc.badgeOn : sc.badgeOff]}>
-            <Ionicons name={isOn ? 'power' : 'power-outline'} size={9} color={isOn ? COLORS.accent : '#FF4D4D'} />
+            <Ionicons name={isOn ? 'power' : 'power-outline'} size={9} color={isOn ? colors.accent : '#FF4D4D'} />
             <Text style={[sc.badgeText, isOn ? sc.badgeTextOn : sc.badgeTextOff]}>{isOn ? 'ON' : 'OFF'}</Text>
           </View>
         </View>
@@ -441,7 +481,7 @@ const ScheduleCard: React.FC<ScheduleCardProps> = ({ schedule, onEdit, onDelete,
           <Ionicons
             name={isLight ? 'bulb-outline' : 'sync-outline'}
             size={11}
-            color={isLight ? COLORS.accent : COLORS.blue}
+            color={isLight ? colors.accent : colors.blue}
           />
         </View>
         <Text style={sc.deviceText}>{formatDevice(schedule.device_id)}</Text>
@@ -465,12 +505,12 @@ const ScheduleCard: React.FC<ScheduleCardProps> = ({ schedule, onEdit, onDelete,
       {/* Row 4: created by + actions */}
       <View style={sc.footer}>
         <View style={sc.metaGroup}>
-          <Ionicons name="person-outline" size={11} color={COLORS.textMuted} />
+          <Ionicons name="person-outline" size={11} color={colors.textMuted} />
           <Text style={sc.metaText}>{schedule.created_by}</Text>
         </View>
         <View style={sc.btnGroup}>
           <TouchableOpacity style={sc.editBtn} onPress={onEdit} activeOpacity={0.7}>
-            <Ionicons name="pencil-outline" size={13} color={COLORS.textSecondary} />
+            <Ionicons name="pencil-outline" size={13} color={colors.textSecondary} />
             <Text style={sc.editBtnText}>Edit</Text>
           </TouchableOpacity>
           <TouchableOpacity style={sc.deleteBtn} onPress={onDelete} activeOpacity={0.7}>
@@ -479,39 +519,40 @@ const ScheduleCard: React.FC<ScheduleCardProps> = ({ schedule, onEdit, onDelete,
         </View>
       </View>
     </View>
+    </FadeInView>
   );
 };
 
-const sc = StyleSheet.create({
-  card: { backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.glassBorder, borderRadius: RADIUS.lg, padding: SPACING.lg, marginBottom: SPACING.md },
+const createScStyles = (colors: ThemeColors) => StyleSheet.create({
+  card: { backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder, borderRadius: RADIUS.lg, padding: SPACING.lg, marginBottom: SPACING.md },
   cardDisabled: { opacity: 0.5 },
   row1: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: SPACING.sm },
   timeGroup: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
-  time: { color: COLORS.text, fontSize: 26, fontWeight: '700', letterSpacing: -0.5 },
-  timeDimmed: { color: COLORS.textSecondary },
+  time: { color: colors.text, fontSize: 26, fontWeight: '700', letterSpacing: -0.5 },
+  timeDimmed: { color: colors.textSecondary },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: SPACING.sm, paddingVertical: 4, borderRadius: RADIUS.full, borderWidth: 1, alignSelf: 'center' },
   badgeOn:       { backgroundColor: 'rgba(255,122,0,0.12)', borderColor: 'rgba(255,122,0,0.3)' },
   badgeOff:      { backgroundColor: 'rgba(255,77,77,0.10)', borderColor: 'rgba(255,77,77,0.25)' },
   badgeText:     { fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
-  badgeTextOn:   { color: COLORS.accent },
+  badgeTextOn:   { color: colors.accent },
   badgeTextOff:  { color: '#FF4D4D' },
   deviceRow: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.md, gap: SPACING.xs },
   deviceDot: { width: 22, height: 22, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
   dotLight: { backgroundColor: 'rgba(255,122,0,0.12)' },
   dotFan:   { backgroundColor: 'rgba(96,165,250,0.12)' },
-  deviceText: { color: COLORS.textSecondary, fontSize: 13, fontWeight: '500' },
+  deviceText: { color: colors.textSecondary, fontSize: 13, fontWeight: '500' },
   daysRow:      { flexDirection: 'row', gap: 5, marginBottom: SPACING.md },
   dayDot:       { width: 26, height: 26, borderRadius: RADIUS.full, backgroundColor: 'rgba(255,255,255,0.04)', alignItems: 'center', justifyContent: 'center' },
   dayDotActive: { backgroundColor: 'rgba(255,122,0,0.15)' },
-  dayText:      { color: COLORS.textMuted, fontSize: 9, fontWeight: '800' },
-  dayTextActive:{ color: COLORS.accent },
+  dayText:      { color: colors.textMuted, fontSize: 9, fontWeight: '800' },
+  dayTextActive:{ color: colors.accent },
   divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginBottom: SPACING.md },
   footer:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   metaGroup:{ flexDirection: 'row', alignItems: 'center', gap: 5 },
-  metaText: { color: COLORS.textMuted, fontSize: 11 },
+  metaText: { color: colors.textMuted, fontSize: 11 },
   btnGroup: { flexDirection: 'row', gap: SPACING.xs },
-  editBtn:  { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: SPACING.md, paddingVertical: 6, backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.glassBorder, borderRadius: RADIUS.sm },
-  editBtnText: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '600' },
+  editBtn:  { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: SPACING.md, paddingVertical: 6, backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder, borderRadius: RADIUS.sm },
+  editBtnText: { color: colors.textSecondary, fontSize: 12, fontWeight: '600' },
   deleteBtn: { width: 30, height: 30, borderRadius: RADIUS.sm, backgroundColor: 'rgba(255,77,77,0.07)', borderWidth: 1, borderColor: 'rgba(255,77,77,0.22)', alignItems: 'center', justifyContent: 'center' },
 });
 
@@ -519,6 +560,8 @@ const sc = StyleSheet.create({
 
 const SchedulesScreen: React.FC = () => {
   const { user } = useAuth();
+  const { colors, theme } = useTheme();
+  const s = useMemo(() => createStyles(colors), [colors]);
   const isAdmin = user?.role === 'admin';
 
   const [schedules, setSchedules] = useState<Schedule[]>([]);
@@ -602,7 +645,7 @@ const SchedulesScreen: React.FC = () => {
 
   return (
     <View style={s.root}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+      <StatusBar barStyle={theme === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={s.glowTR} />
       <View style={s.glowBL} />
 
@@ -631,21 +674,21 @@ const SchedulesScreen: React.FC = () => {
         {loading ? (
           <View style={s.center}>
             <View style={s.emptyIconWrap}>
-              <Ionicons name="time-outline" size={32} color={COLORS.textMuted} />
+              <Ionicons name="time-outline" size={32} color={colors.textMuted} />
             </View>
             <Text style={s.emptyTitle}>Loading schedules…</Text>
           </View>
         ) : visibleSchedules.length === 0 ? (
           <View style={s.center}>
             <View style={s.emptyIconWrap}>
-              <Ionicons name="calendar-outline" size={36} color={COLORS.textMuted} />
+              <Ionicons name="calendar-outline" size={36} color={colors.textMuted} />
             </View>
             <Text style={s.emptyTitle}>No schedules yet</Text>
             <Text style={s.emptySubtitle}>
               Tap the + button above to create{'\n'}your first automation.
             </Text>
             <TouchableOpacity style={s.emptyBtn} onPress={openCreate} activeOpacity={0.8}>
-              <Ionicons name="add" size={16} color={COLORS.accent} />
+              <Ionicons name="add" size={16} color={colors.accent} />
               <Text style={s.emptyBtnText}>Create Schedule</Text>
             </TouchableOpacity>
           </View>
@@ -653,9 +696,10 @@ const SchedulesScreen: React.FC = () => {
           <FlatList
             data={visibleSchedules}
             keyExtractor={(item) => String(item.id)}
-            renderItem={({ item }) => (
+            renderItem={({ item, index }) => (
               <ScheduleCard
                 schedule={item}
+                index={index}
                 onEdit={() => openEdit(item)}
                 onDelete={() => handleDelete(item.id)}
                 onToggleEnabled={(v) => handleToggleEnabled(item, v)}
@@ -679,31 +723,31 @@ const SchedulesScreen: React.FC = () => {
   );
 };
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.background },
   safe: { flex: 1 },
   glowTR: { position: 'absolute', top: -80, right: -80, width: 280, height: 280, borderRadius: 140, backgroundColor: 'rgba(255,122,0,0.07)' },
   glowBL: { position: 'absolute', bottom: 100, left: -60, width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(255,122,0,0.04)' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: SPACING.xl, paddingTop: SPACING.xl, paddingBottom: SPACING.lg },
-  title:    { color: COLORS.text, fontSize: 22, fontWeight: '700', letterSpacing: -0.5 },
-  subtitle: { color: COLORS.textMuted, fontSize: 13, marginTop: 2 },
+  title:    { color: colors.text, fontSize: 22, fontWeight: '700', letterSpacing: -0.5 },
+  subtitle: { color: colors.textMuted, fontSize: 13, marginTop: 2 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
-  badge: { width: 40, height: 40, borderRadius: 12, backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.glassBorder, alignItems: 'center', justifyContent: 'center' },
-  badgeText: { color: COLORS.accent, fontSize: 15, fontWeight: '700' },
+  badge: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder, alignItems: 'center', justifyContent: 'center' },
+  badgeText: { color: colors.accent, fontSize: 15, fontWeight: '700' },
   addBtn: {
     width: 40, height: 40, borderRadius: 12,
-    backgroundColor: COLORS.accent,
+    backgroundColor: colors.accent,
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: COLORS.accent, shadowOffset: { width: 0, height: 4 },
+    shadowColor: colors.accent, shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4, shadowRadius: 8, elevation: 6,
   },
   list:   { paddingHorizontal: SPACING.xl, paddingBottom: 100 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SPACING.xxxl },
-  emptyIconWrap: { width: 80, height: 80, borderRadius: 40, backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.glassBorder, alignItems: 'center', justifyContent: 'center', marginBottom: SPACING.lg },
-  emptyTitle:    { color: COLORS.text, fontSize: 18, fontWeight: '600', marginBottom: SPACING.sm },
-  emptySubtitle: { color: COLORS.textMuted, fontSize: 14, textAlign: 'center', lineHeight: 22, marginBottom: SPACING.xl },
+  emptyIconWrap: { width: 80, height: 80, borderRadius: 40, backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder, alignItems: 'center', justifyContent: 'center', marginBottom: SPACING.lg },
+  emptyTitle:    { color: colors.text, fontSize: 18, fontWeight: '600', marginBottom: SPACING.sm },
+  emptySubtitle: { color: colors.textMuted, fontSize: 14, textAlign: 'center', lineHeight: 22, marginBottom: SPACING.xl },
   emptyBtn:      { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, borderWidth: 1, borderColor: 'rgba(255,122,0,0.35)', backgroundColor: 'rgba(255,122,0,0.08)', borderRadius: RADIUS.full, paddingHorizontal: SPACING.xl, paddingVertical: SPACING.md },
-  emptyBtnText:  { color: COLORS.accent, fontSize: 14, fontWeight: '600' },
+  emptyBtnText:  { color: colors.accent, fontSize: 14, fontWeight: '600' },
 });
 
 export default SchedulesScreen;

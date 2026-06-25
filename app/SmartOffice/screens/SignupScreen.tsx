@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -15,8 +15,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
-import { COLORS, SPACING, RADIUS } from '../constants/theme';
+import { SPACING, RADIUS, ThemeColors } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
+import FadeInView from '../components/FadeInView';
 
 const SignupScreen: React.FC = () => {
   const [name, setName] = useState('');
@@ -28,6 +30,8 @@ const SignupScreen: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const { signup } = useAuth();
+  const { colors, theme } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const router = useRouter();
 
   const handleSignup = async () => {
@@ -55,7 +59,7 @@ const SignupScreen: React.FC = () => {
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+      <StatusBar barStyle={theme === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={styles.glowTopLeft} />
       <View style={styles.glowBottomRight} />
 
@@ -71,29 +75,32 @@ const SignupScreen: React.FC = () => {
           >
             {/* Back button */}
             <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-              <Ionicons name="arrow-back" size={20} color={COLORS.textSecondary} />
+              <Ionicons name="arrow-back" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
 
             {/* Hero */}
-            <View style={styles.hero}>
-              <View style={styles.logoCircle}>
-                <Ionicons name="person-add" size={28} color={COLORS.accent} />
+            <FadeInView distance={20} duration={500}>
+              <View style={styles.hero}>
+                <View style={styles.logoCircle}>
+                  <Ionicons name="person-add" size={28} color={colors.accent} />
+                </View>
+                <Text style={styles.appName}>Create Account</Text>
+                <Text style={styles.tagline}>Sign up to access your cabin controls</Text>
               </View>
-              <Text style={styles.appName}>Create Account</Text>
-              <Text style={styles.tagline}>Sign up to access your cabin controls</Text>
-            </View>
+            </FadeInView>
 
             {/* Card */}
+            <FadeInView distance={20} duration={500} delay={120}>
             <View style={styles.card}>
               {/* Name */}
               <View style={styles.fieldGroup}>
                 <Text style={styles.label}>Full Name</Text>
                 <View style={[styles.inputWrapper, !!error && !name.trim() && styles.inputError]}>
-                  <Ionicons name="person-outline" size={18} color={COLORS.textMuted} style={styles.inputIcon} />
+                  <Ionicons name="person-outline" size={18} color={colors.textMuted} style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
                     placeholder="John Doe"
-                    placeholderTextColor={COLORS.textMuted}
+                    placeholderTextColor={colors.textMuted}
                     value={name}
                     onChangeText={(t) => { setName(t); setError(''); }}
                     autoCapitalize="words"
@@ -106,11 +113,11 @@ const SignupScreen: React.FC = () => {
               <View style={styles.fieldGroup}>
                 <Text style={styles.label}>Email</Text>
                 <View style={[styles.inputWrapper, !!error && !email.trim() && styles.inputError]}>
-                  <Ionicons name="mail-outline" size={18} color={COLORS.textMuted} style={styles.inputIcon} />
+                  <Ionicons name="mail-outline" size={18} color={colors.textMuted} style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
                     placeholder="you@example.com"
-                    placeholderTextColor={COLORS.textMuted}
+                    placeholderTextColor={colors.textMuted}
                     value={email}
                     onChangeText={(t) => { setEmail(t); setError(''); }}
                     autoCapitalize="none"
@@ -124,11 +131,11 @@ const SignupScreen: React.FC = () => {
               <View style={styles.fieldGroup}>
                 <Text style={styles.label}>Password</Text>
                 <View style={styles.inputWrapper}>
-                  <Ionicons name="lock-closed-outline" size={18} color={COLORS.textMuted} style={styles.inputIcon} />
+                  <Ionicons name="lock-closed-outline" size={18} color={colors.textMuted} style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
                     placeholder="Min. 4 characters"
-                    placeholderTextColor={COLORS.textMuted}
+                    placeholderTextColor={colors.textMuted}
                     value={password}
                     onChangeText={(t) => { setPassword(t); setError(''); }}
                     secureTextEntry={!showPassword}
@@ -138,7 +145,7 @@ const SignupScreen: React.FC = () => {
                     <Ionicons
                       name={showPassword ? 'eye-off-outline' : 'eye-outline'}
                       size={18}
-                      color={COLORS.textMuted}
+                      color={colors.textMuted}
                     />
                   </TouchableOpacity>
                 </View>
@@ -148,11 +155,11 @@ const SignupScreen: React.FC = () => {
               <View style={styles.fieldGroup}>
                 <Text style={styles.label}>Confirm Password</Text>
                 <View style={[styles.inputWrapper, !!error && password !== confirmPassword && styles.inputError]}>
-                  <Ionicons name="lock-closed-outline" size={18} color={COLORS.textMuted} style={styles.inputIcon} />
+                  <Ionicons name="lock-closed-outline" size={18} color={colors.textMuted} style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
                     placeholder="Re-enter password"
-                    placeholderTextColor={COLORS.textMuted}
+                    placeholderTextColor={colors.textMuted}
                     value={confirmPassword}
                     onChangeText={(t) => { setConfirmPassword(t); setError(''); }}
                     secureTextEntry={!showPassword}
@@ -172,7 +179,7 @@ const SignupScreen: React.FC = () => {
 
               {/* Info banner */}
               <View style={styles.infoBanner}>
-                <Ionicons name="information-circle-outline" size={15} color={COLORS.accent} />
+                <Ionicons name="information-circle-outline" size={15} color={colors.accent} />
                 <Text style={styles.infoText}>
                   After signing up, an admin will assign a cabin to your account.
                 </Text>
@@ -203,6 +210,7 @@ const SignupScreen: React.FC = () => {
                 </Text>
               </TouchableOpacity>
             </View>
+            </FadeInView>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -210,8 +218,8 @@ const SignupScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
   safeArea: { flex: 1 },
   scroll: {
@@ -231,8 +239,8 @@ const styles = StyleSheet.create({
   },
   backBtn: {
     width: 40, height: 40, borderRadius: 12,
-    backgroundColor: COLORS.glass,
-    borderWidth: 1, borderColor: COLORS.glassBorder,
+    backgroundColor: colors.glass,
+    borderWidth: 1, borderColor: colors.glassBorder,
     alignItems: 'center', justifyContent: 'center',
     marginBottom: SPACING.xl,
   },
@@ -244,27 +252,27 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     marginBottom: SPACING.md,
   },
-  appName: { color: COLORS.text, fontSize: 24, fontWeight: '700', letterSpacing: -0.5 },
-  tagline: { color: COLORS.textSecondary, fontSize: 13, fontWeight: '300', marginTop: 4, textAlign: 'center' },
+  appName: { color: colors.text, fontSize: 24, fontWeight: '700', letterSpacing: -0.5 },
+  tagline: { color: colors.textSecondary, fontSize: 13, fontWeight: '300', marginTop: 4, textAlign: 'center' },
   card: {
-    backgroundColor: COLORS.glass,
-    borderWidth: 1, borderColor: COLORS.glassBorder,
+    backgroundColor: colors.glass,
+    borderWidth: 1, borderColor: colors.glassBorder,
     borderRadius: RADIUS.xl, padding: SPACING.xl,
   },
   fieldGroup: { marginBottom: SPACING.md },
   label: {
-    color: COLORS.textSecondary, fontSize: 12, fontWeight: '500',
+    color: colors.textSecondary, fontSize: 12, fontWeight: '500',
     marginBottom: SPACING.xs, letterSpacing: 0.4, textTransform: 'uppercase',
   },
   inputWrapper: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1, borderColor: COLORS.glassBorder,
+    borderWidth: 1, borderColor: colors.glassBorder,
     borderRadius: RADIUS.md, paddingHorizontal: SPACING.sm, height: 50,
   },
   inputError: { borderColor: 'rgba(255,77,77,0.5)' },
   inputIcon: { marginRight: SPACING.xs },
-  input: { flex: 1, color: COLORS.text, fontSize: 15 },
+  input: { flex: 1, color: colors.text, fontSize: 15 },
   eyeBtn: { padding: SPACING.xs },
   errorRow: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.md },
   errorText: { color: '#FF4D4D', fontSize: 13, marginLeft: SPACING.xs },
@@ -276,19 +284,19 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg,
   },
   infoText: {
-    color: COLORS.textSecondary, fontSize: 12,
+    color: colors.textSecondary, fontSize: 12,
     flex: 1, marginLeft: SPACING.xs, lineHeight: 18,
   },
   signUpBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: COLORS.accent, borderRadius: RADIUS.md,
+    backgroundColor: colors.accent, borderRadius: RADIUS.md,
     height: 52,
   },
   btnDisabled: { opacity: 0.6 },
   signUpText: { color: '#fff', fontSize: 16, fontWeight: '600', marginRight: SPACING.xs },
   loginLink: { alignItems: 'center', marginTop: SPACING.lg },
-  loginLinkText: { color: COLORS.textMuted, fontSize: 13 },
-  loginLinkAccent: { color: COLORS.accent, fontWeight: '600' },
+  loginLinkText: { color: colors.textMuted, fontSize: 13 },
+  loginLinkAccent: { color: colors.accent, fontWeight: '600' },
 });
 
 export default SignupScreen;

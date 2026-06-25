@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,8 +13,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, SPACING, RADIUS } from '../constants/theme';
+import { SPACING, RADIUS, ThemeColors } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
+import FadeInView from '../components/FadeInView';
 
 const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -24,6 +26,8 @@ const LoginScreen: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const { login } = useAuth();
+  const { colors, theme } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -42,7 +46,7 @@ const LoginScreen: React.FC = () => {
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+      <StatusBar barStyle={theme === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={styles.glowTopRight} />
       <View style={styles.glowBottomLeft} />
 
@@ -57,15 +61,18 @@ const LoginScreen: React.FC = () => {
             showsVerticalScrollIndicator={false}
           >
             {/* Logo */}
-            <View style={styles.hero}>
-              <View style={styles.logoCircle}>
-                <Ionicons name="flash" size={32} color={COLORS.accent} />
+            <FadeInView distance={20} duration={500}>
+              <View style={styles.hero}>
+                <View style={styles.logoCircle}>
+                  <Ionicons name="flash" size={32} color={colors.accent} />
+                </View>
+                <Text style={styles.appName}>Nestboard</Text>
+                <Text style={styles.tagline}>Room Automation System</Text>
               </View>
-              <Text style={styles.appName}>SmartOffice</Text>
-              <Text style={styles.tagline}>Room Automation System</Text>
-            </View>
+            </FadeInView>
 
             {/* Card */}
+            <FadeInView distance={20} duration={500} delay={120}>
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Sign In</Text>
               <Text style={styles.cardSubtitle}>Enter your credentials to continue</Text>
@@ -74,11 +81,11 @@ const LoginScreen: React.FC = () => {
               <View style={styles.fieldGroup}>
                 <Text style={styles.label}>Email</Text>
                 <View style={[styles.inputWrapper, !!error && styles.inputError]}>
-                  <Ionicons name="mail-outline" size={18} color={COLORS.textMuted} style={styles.inputIcon} />
+                  <Ionicons name="mail-outline" size={18} color={colors.textMuted} style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
                     placeholder="you@example.com"
-                    placeholderTextColor={COLORS.textMuted}
+                    placeholderTextColor={colors.textMuted}
                     value={email}
                     onChangeText={(t) => { setEmail(t); setError(''); }}
                     autoCapitalize="none"
@@ -92,11 +99,11 @@ const LoginScreen: React.FC = () => {
               <View style={styles.fieldGroup}>
                 <Text style={styles.label}>Password</Text>
                 <View style={[styles.inputWrapper, !!error && styles.inputError]}>
-                  <Ionicons name="lock-closed-outline" size={18} color={COLORS.textMuted} style={styles.inputIcon} />
+                  <Ionicons name="lock-closed-outline" size={18} color={colors.textMuted} style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
                     placeholder="••••••••"
-                    placeholderTextColor={COLORS.textMuted}
+                    placeholderTextColor={colors.textMuted}
                     value={password}
                     onChangeText={(t) => { setPassword(t); setError(''); }}
                     secureTextEntry={!showPassword}
@@ -107,7 +114,7 @@ const LoginScreen: React.FC = () => {
                     <Ionicons
                       name={showPassword ? 'eye-off-outline' : 'eye-outline'}
                       size={18}
-                      color={COLORS.textMuted}
+                      color={colors.textMuted}
                     />
                   </TouchableOpacity>
                 </View>
@@ -140,6 +147,7 @@ const LoginScreen: React.FC = () => {
 
               <Text style={styles.adminHint}>Contact your admin for account access.</Text>
             </View>
+            </FadeInView>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -147,8 +155,8 @@ const LoginScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
   safeArea: { flex: 1 },
   scroll: {
@@ -175,41 +183,41 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     marginBottom: SPACING.md,
   },
-  appName: { color: COLORS.text, fontSize: 28, fontWeight: '700', letterSpacing: -0.8 },
-  tagline: { color: COLORS.textSecondary, fontSize: 13, fontWeight: '300', marginTop: 4 },
+  appName: { color: colors.text, fontSize: 28, fontWeight: '700', letterSpacing: -0.8 },
+  tagline: { color: colors.textSecondary, fontSize: 13, fontWeight: '300', marginTop: 4 },
   card: {
-    backgroundColor: COLORS.glass,
-    borderWidth: 1, borderColor: COLORS.glassBorder,
+    backgroundColor: colors.glass,
+    borderWidth: 1, borderColor: colors.glassBorder,
     borderRadius: RADIUS.xl, padding: SPACING.xl,
   },
-  cardTitle: { color: COLORS.text, fontSize: 22, fontWeight: '700', letterSpacing: -0.5, marginBottom: 4 },
-  cardSubtitle: { color: COLORS.textMuted, fontSize: 13, marginBottom: SPACING.xl },
+  cardTitle: { color: colors.text, fontSize: 22, fontWeight: '700', letterSpacing: -0.5, marginBottom: 4 },
+  cardSubtitle: { color: colors.textMuted, fontSize: 13, marginBottom: SPACING.xl },
   fieldGroup: { marginBottom: SPACING.md },
   label: {
-    color: COLORS.textSecondary, fontSize: 12, fontWeight: '500',
+    color: colors.textSecondary, fontSize: 12, fontWeight: '500',
     marginBottom: SPACING.xs, letterSpacing: 0.4, textTransform: 'uppercase',
   },
   inputWrapper: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1, borderColor: COLORS.glassBorder,
+    borderWidth: 1, borderColor: colors.glassBorder,
     borderRadius: RADIUS.md, paddingHorizontal: SPACING.sm, height: 50,
   },
   inputError: { borderColor: 'rgba(255,77,77,0.5)' },
   inputIcon: { marginRight: SPACING.xs },
-  input: { flex: 1, color: COLORS.text, fontSize: 15 },
+  input: { flex: 1, color: colors.text, fontSize: 15 },
   eyeBtn: { padding: SPACING.xs },
   errorRow: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.md },
   errorText: { color: '#FF4D4D', fontSize: 13, marginLeft: SPACING.xs },
   signInBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: COLORS.accent, borderRadius: RADIUS.md,
+    backgroundColor: colors.accent, borderRadius: RADIUS.md,
     height: 52, marginTop: SPACING.sm,
   },
   btnDisabled: { opacity: 0.6 },
   signInText: { color: '#fff', fontSize: 16, fontWeight: '600', marginRight: SPACING.xs },
   adminHint: {
-    color: COLORS.textMuted, fontSize: 11,
+    color: colors.textMuted, fontSize: 11,
     textAlign: 'center', marginTop: SPACING.lg,
   },
 });

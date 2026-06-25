@@ -20,6 +20,14 @@ class StateLogEntry(BaseModel):
         from_attributes = True
 
 
+class LogBucket(BaseModel):
+    bucket_start: datetime
+    avg_on: float
+    peak_on: int
+    total: int
+    samples: int
+
+
 class UserCreate(BaseModel):
     username: str
     password: str
