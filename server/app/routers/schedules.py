@@ -4,9 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from auth import can_access_room, get_current_user, get_room_from_device
-from database import Device, Schedule, get_db
-from schemas import ScheduleCreate, ScheduleResponse, ScheduleUpdate
+from ..auth import can_access_room, get_current_user, get_room_from_device
+from ..database import Device, Schedule, get_db
+from ..schemas import ScheduleCreate, ScheduleResponse, ScheduleUpdate
 
 router = APIRouter(tags=["Schedules"])
 
@@ -31,7 +31,6 @@ def create_schedule(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """Create a schedule. Users may only schedule devices in their assigned room(s)."""
     room = get_room_from_device(schedule.device_id)
     if not room:
         raise HTTPException(status_code=400, detail="Invalid device_id — expected 'room/device'")
@@ -63,7 +62,6 @@ def list_schedules(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """Admin sees all; users see only their assigned room(s)."""
     if current_user.get("role") == "admin":
         rows = db.query(Schedule).order_by(Schedule.id).all()
     else:
@@ -101,7 +99,6 @@ def update_schedule(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """Partial update — only include fields you want to change."""
     sched = db.query(Schedule).filter(Schedule.id == schedule_id).first()
     if not sched:
         raise HTTPException(status_code=404, detail="Schedule not found")

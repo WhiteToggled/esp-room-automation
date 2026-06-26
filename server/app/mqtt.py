@@ -1,6 +1,6 @@
 import paho.mqtt.client as mqtt
-from config import MQTT_BROKER, MQTT_PORT
-from state import device_states
+from .config import MQTT_BROKER, MQTT_PORT
+from .state import device_states
 
 
 def _on_connect(client, userdata, flags, rc, properties):

@@ -2,7 +2,10 @@ import os
 import sqlite3
 from typing import Dict, List, Optional
 
-USERS_DB_PATH = os.path.join(os.path.dirname(__file__), "users.db")
+from passlib.context import CryptContext
+
+USERS_DB_PATH = "users.db"
+_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def _parse_rooms(room_str: Optional[str]) -> List[str]:
@@ -34,6 +37,15 @@ def init_users_db():
             cur.execute("ALTER TABLE users ADD COLUMN room TEXT")
         except sqlite3.OperationalError:
             pass  # column already exists
+
+        cur.execute("SELECT 1 FROM users WHERE username = 'admin'")
+        if not cur.fetchone():
+            admin_password = os.getenv("ADMIN_PASSWORD", "1234")
+            cur.execute(
+                "INSERT INTO users (username, password_hash, role, room) VALUES (?, ?, ?, ?)",
+                ("admin", _pwd_context.hash(admin_password), "admin", ""),
+            )
+
         con.commit()
     finally:
         con.close()
