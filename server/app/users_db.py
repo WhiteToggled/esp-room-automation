@@ -4,7 +4,9 @@ from typing import Dict, List, Optional
 
 from passlib.context import CryptContext
 
-USERS_DB_PATH = "users.db"
+from .config import DATA_DIR
+
+USERS_DB_PATH = os.path.join(DATA_DIR, "users.db")
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
@@ -113,6 +115,20 @@ def list_all_users() -> List[Dict]:
             {"username": r[0], "role": r[1], "rooms": _parse_rooms(r[2])}
             for r in cur.fetchall()
         ]
+    finally:
+        con.close()
+
+
+def update_user_password(username: str, new_password_hash: str) -> bool:
+    con = sqlite3.connect(USERS_DB_PATH)
+    try:
+        cur = con.cursor()
+        cur.execute(
+            "UPDATE users SET password_hash = ? WHERE username = ?",
+            (new_password_hash, username),
+        )
+        con.commit()
+        return cur.rowcount > 0
     finally:
         con.close()
 
