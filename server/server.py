@@ -1,6 +1,4 @@
-from main import app
-from database import Base, Device, get_db
-from auth import USERS_DB
+from app.main import app
 
 if __name__ == "__main__":
     import uvicorn

@@ -33,3 +33,6 @@ archive.zip
 
 # Environment variables
 .env
+
+# SQLite databases
+*.db

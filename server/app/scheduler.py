@@ -3,10 +3,10 @@ from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from config import LOG_INTERVAL_MINUTES
-from database import Schedule, SessionLocal, StateLog, Device
-from mqtt import mqtt_client
-from state import device_states
+from .config import LOG_INTERVAL_MINUTES
+from .database import Schedule, SessionLocal, StateLog, Device
+from .mqtt import mqtt_client
+from .state import device_states
 
 
 def log_device_states():
@@ -28,7 +28,6 @@ def log_device_states():
 
 
 def run_scheduled_actions():
-    """Fires any enabled schedule matching the current hour, minute, and day."""
     now = datetime.now()
     current_day = now.strftime("%a").lower()
 

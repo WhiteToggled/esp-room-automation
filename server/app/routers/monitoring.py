@@ -5,11 +5,11 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from auth import get_current_user, get_room_from_device
-from database import Device, StateLog, get_db
-from scheduler import log_device_states
-from schemas import LogBucket, StateLogEntry
-from state import device_states
+from ..auth import get_current_user, get_room_from_device
+from ..database import Device, StateLog, get_db
+from ..scheduler import log_device_states
+from ..schemas import LogBucket, StateLogEntry
+from ..state import device_states
 
 router = APIRouter(tags=["Monitoring"])
 
@@ -25,7 +25,6 @@ def get_all_states(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """Admin sees all devices; users see only their assigned room(s)."""
     devices = db.query(Device).all()
     if current_user.get("role") == "admin":
         return {d.id: device_states.get(d.id, 0) for d in devices}
@@ -46,7 +45,6 @@ def get_state_logs(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """Most recent state snapshots, newest first."""
     rows = db.query(StateLog).order_by(StateLog.logged_at.desc()).limit(limit).all()
     return [
         StateLogEntry(id=r.id, logged_at=r.logged_at, snapshot=json.loads(r.snapshot))
@@ -60,7 +58,6 @@ def get_log_range(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """Bucketed on-device counts for a period, oldest first, gaps filled with empty buckets."""
     cfg = RANGE_CONFIG[period]
     start = datetime.utcnow() - cfg["span"]
     bucket_delta: timedelta = cfg["bucket"]
@@ -99,7 +96,6 @@ def trigger_log_now(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """Manually capture an immediate state snapshot."""
     log_device_states()
     latest = db.query(StateLog).order_by(StateLog.logged_at.desc()).first()
     if not latest:

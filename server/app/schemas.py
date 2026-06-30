@@ -3,7 +3,7 @@ from typing import Dict, List, Optional
 
 from pydantic import BaseModel, field_validator
 
-from config import VALID_DAYS
+from .config import VALID_DAYS
 
 
 class ToggleResponse(BaseModel):
