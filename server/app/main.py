@@ -55,3 +55,8 @@ app.include_router(admin.router)
 app.include_router(control.router)
 app.include_router(monitoring.router)
 app.include_router(schedules.router)
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}

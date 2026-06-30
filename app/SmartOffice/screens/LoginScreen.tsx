@@ -79,7 +79,7 @@ const LoginScreen: React.FC = () => {
 
               {/* Email */}
               <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Email</Text>
+                <Text style={styles.label}>Username</Text>
                 <View style={[styles.inputWrapper, !!error && styles.inputError]}>
                   <Ionicons name="mail-outline" size={18} color={colors.textMuted} style={styles.inputIcon} />
                   <TextInput

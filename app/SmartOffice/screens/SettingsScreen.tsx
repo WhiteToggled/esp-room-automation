@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SPACING, RADIUS, ThemeColors } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { listUsers, createUser, deleteUser } from '../api/devices';
+import ChangePasswordModal from '../components/ChangePasswordModal';
 
 interface BackendUser {
   username: string;
@@ -251,10 +252,11 @@ const createCfStyles = (colors: ThemeColors) => StyleSheet.create({
 interface UserListProps {
   users: BackendUser[];
   onDelete: (username: string) => void;
+  onResetPassword: (username: string) => void;
   deleting: string | null;
 }
 
-const UserList: React.FC<UserListProps> = ({ users, onDelete, deleting }) => {
+const UserList: React.FC<UserListProps> = ({ users, onDelete, onResetPassword, deleting }) => {
   const { colors } = useTheme();
   const ul = useMemo(() => createUlStyles(colors), [colors]);
 
@@ -287,6 +289,13 @@ const UserList: React.FC<UserListProps> = ({ users, onDelete, deleting }) => {
               {u.role} {u.rooms.length > 0 ? `· ${u.rooms.join(', ')}` : '· No room'}
             </Text>
           </View>
+          <TouchableOpacity
+            style={ul.resetBtn}
+            onPress={() => onResetPassword(u.username)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="key-outline" size={15} color={colors.accent} />
+          </TouchableOpacity>
           <TouchableOpacity
             style={ul.deleteBtn}
             onPress={() => onDelete(u.username)}
@@ -331,6 +340,11 @@ const createUlStyles = (colors: ThemeColors) => StyleSheet.create({
   info: { flex: 1 },
   username: { color: colors.text, fontSize: 14, fontWeight: '600' },
   meta: { color: colors.textMuted, fontSize: 11, marginTop: 2 },
+  resetBtn: {
+    width: 34, height: 34, borderRadius: RADIUS.sm,
+    backgroundColor: 'rgba(255,122,0,0.08)', borderWidth: 1, borderColor: 'rgba(255,122,0,0.22)',
+    alignItems: 'center', justifyContent: 'center', marginRight: SPACING.sm,
+  },
   deleteBtn: {
     width: 34, height: 34, borderRadius: RADIUS.sm,
     backgroundColor: 'rgba(255,77,77,0.08)', borderWidth: 1, borderColor: 'rgba(255,77,77,0.22)',
@@ -352,6 +366,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ isActive, onUserChanged
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [formKey, setFormKey] = useState(0);
+  const [resetUser, setResetUser] = useState<string | null>(null);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -426,10 +441,21 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ isActive, onUserChanged
               <Text style={s.loadingText}>Loading users…</Text>
             </View>
           ) : (
-            <UserList users={users} onDelete={handleDelete} deleting={deleting} />
+            <UserList
+              users={users}
+              onDelete={handleDelete}
+              onResetPassword={setResetUser}
+              deleting={deleting}
+            />
           )}
         </ScrollView>
       </SafeAreaView>
+
+      <ChangePasswordModal
+        visible={!!resetUser}
+        username={resetUser ?? ''}
+        onClose={() => setResetUser(null)}
+      />
     </View>
   );
 };

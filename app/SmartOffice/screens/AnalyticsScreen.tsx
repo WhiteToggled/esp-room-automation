@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -10,7 +10,8 @@ import {
   View,
 } from 'react-native';
 import { getLogs, triggerLog } from '../api/devices';
-import { COLORS, FONTS, RADIUS, SPACING } from '../constants/theme';
+import { RADIUS, SPACING, ThemeColors } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -160,10 +161,14 @@ interface GanttProps {
   rangeStart: number;
   rangeEnd: number;
   range: Range;
+  colors: ThemeColors;
 }
 
-function GanttChart({ intervals, devices, rangeStart, rangeEnd, range }: GanttProps) {
+function GanttChart({ intervals, devices, rangeStart, rangeEnd, range, colors }: GanttProps) {
   const span = rangeEnd - rangeStart;
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const vx = styles.vx;
+  const tx = styles.tx;
 
   if (!devices.length) {
     return (
@@ -208,7 +213,7 @@ function GanttChart({ intervals, devices, rangeStart, rangeEnd, range }: GanttPr
                 width: 1,
                 height: chartH,
                 backgroundColor: i === 0 || i === GRID_LINES
-                  ? COLORS.glassBorder
+                  ? colors.glassBorder
                   : 'rgba(255,255,255,0.07)',
               }}
             />
@@ -223,7 +228,7 @@ function GanttChart({ intervals, devices, rangeStart, rangeEnd, range }: GanttPr
             return (
               <View key={id}>
                 {isNewRoom && (
-                  <View style={{ height: 1, backgroundColor: COLORS.glassBorder, marginVertical: 4 }} />
+                  <View style={{ height: 1, backgroundColor: colors.glassBorder, marginVertical: 4 }} />
                 )}
                 <View
                   style={{
@@ -248,7 +253,7 @@ function GanttChart({ intervals, devices, rangeStart, rangeEnd, range }: GanttPr
                         top: 4,
                         bottom: 4,
                         borderRadius: 3,
-                        backgroundColor: COLORS.accent,
+                        backgroundColor: colors.accent,
                         opacity: 0.9,
                       }}
                     />
@@ -281,7 +286,7 @@ function GanttChart({ intervals, devices, rangeStart, rangeEnd, range }: GanttPr
             </View>
           );
         })}
-      </View> 
+      </View>
     </View>
   );
 }
@@ -292,13 +297,15 @@ interface StatTileProps {
   stat: DeviceStat;
   selected: boolean;
   onToggle: () => void;
+  colors: ThemeColors;
 }
 
-function StatTile({ stat, selected, onToggle }: StatTileProps) {
+function StatTile({ stat, selected, onToggle, colors }: StatTileProps) {
+  const { vx, tx } = useMemo(() => createStyles(colors), [colors]);
   const color =
-    stat.uptimePct >= 70 ? COLORS.success :
-    stat.uptimePct >= 40 ? COLORS.accent :
-    COLORS.textSecondary;
+    stat.uptimePct >= 70 ? colors.success :
+    stat.uptimePct >= 40 ? colors.accent :
+    colors.textSecondary;
 
   return (
     <TouchableOpacity
@@ -312,7 +319,7 @@ function StatTile({ stat, selected, onToggle }: StatTileProps) {
       <View style={vx.statTileBar}>
         <View style={[vx.statTileBarFill, { width: `${stat.uptimePct}%` as any, backgroundColor: color }]} />
       </View>
-      <Text style={[tx.statTileId, selected && { color: COLORS.text }]} numberOfLines={1}>
+      <Text style={[tx.statTileId, selected && { color: colors.text }]} numberOfLines={1}>
         {friendlyLabel(stat.id)}
       </Text>
       <Text style={[tx.statTilePct, { color }]}>{stat.uptimePct}%</Text>
@@ -325,7 +332,8 @@ function StatTile({ stat, selected, onToggle }: StatTileProps) {
 
 // ── Totals row ────────────────────────────────────────────────────────────────
 
-function TotalsRow({ logs }: { logs: LogEntry[] }) {
+function TotalsRow({ logs, colors }: { logs: LogEntry[]; colors: ThemeColors }) {
+  const { vx, tx } = useMemo(() => createStyles(colors), [colors]);
   if (!logs.length) return null;
   const latest = [...logs].sort((a, b) => b.logged_at.localeCompare(a.logged_at))[0];
   const activeNow = Object.values(latest.snapshot).filter(Boolean).length;
@@ -351,6 +359,8 @@ function TotalsRow({ logs }: { logs: LogEntry[] }) {
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function AnalyticsScreen() {
+  const { colors } = useTheme();
+  const { vx, tx } = useMemo(() => createStyles(colors), [colors]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -411,7 +421,7 @@ export default function AnalyticsScreen() {
 
       {loading && !refreshing ? (
         <View style={vx.centered}>
-          <ActivityIndicator color={COLORS.accent} size="large" />
+          <ActivityIndicator color={colors.accent} size="large" />
         </View>
       ) : error ? (
         <View style={vx.centered}>
@@ -427,12 +437,12 @@ export default function AnalyticsScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => { setRefreshing(true); fetchLogs(); }}
-              tintColor={COLORS.accent}
+              tintColor={colors.accent}
             />
           }
           showsVerticalScrollIndicator={false}
         >
-          <TotalsRow logs={logs} />
+          <TotalsRow logs={logs} colors={colors} />
 
           <View style={vx.card}>
             <View style={vx.chartHeader}>
@@ -457,6 +467,7 @@ export default function AnalyticsScreen() {
               rangeStart={rangeStart}
               rangeEnd={rangeEnd}
               range={range}
+              colors={colors}
             />
           </View>
 
@@ -488,6 +499,7 @@ export default function AnalyticsScreen() {
                     stat={s}
                     selected={selectedDevices.has(s.id)}
                     onToggle={() => toggleDevice(s.id)}
+                    colors={colors}
                   />
                 ))}
               </View>
@@ -512,47 +524,51 @@ export default function AnalyticsScreen() {
 
 // ── Styles — separated by type so TypeScript stays happy ─────────────────────
 
-const vx = StyleSheet.create({
-  container:       { flex: 1, backgroundColor: COLORS.background },
-  header:          { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: H_PAD, paddingTop: 56, paddingBottom: SPACING.md },
-  refreshBtn:      { width: 36, height: 36, borderRadius: RADIUS.full, backgroundColor: COLORS.glass, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.glassBorder },
-  scroll:          { padding: H_PAD, paddingBottom: 120, gap: SPACING.md },
-  centered:        { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING.xxxl, gap: SPACING.md },
-  totalsRow:       { flexDirection: 'row', gap: SPACING.sm },
-  totalsCard:      { flex: 1, backgroundColor: COLORS.surface, borderRadius: RADIUS.md, padding: SPACING.md, alignItems: 'center', borderWidth: 1, borderColor: COLORS.glassBorder },
-  card:            { backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: SPACING.xl, borderWidth: 1, borderColor: COLORS.glassBorder },
-  chartHeader:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: SPACING.sm },
-  rangeRow:        { flexDirection: 'row', gap: 4 },
-  rangeBtn:        { paddingHorizontal: SPACING.sm, paddingVertical: 5, borderRadius: RADIUS.sm, borderWidth: 1, borderColor: COLORS.glassBorder },
-  rangeBtnActive:  { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
-  tilesGrid:       { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, marginTop: SPACING.md },
-  statTile:        { width: '47%', backgroundColor: COLORS.glass, borderRadius: RADIUS.md, padding: SPACING.md, borderWidth: 1, borderColor: COLORS.glassBorder, overflow: 'hidden' },
-  statTileBar:     { position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, backgroundColor: COLORS.glass },
-  statTileBarFill: { height: '100%', borderRadius: 2 },
-  retryBtn:        { paddingHorizontal: SPACING.xl, paddingVertical: SPACING.sm, backgroundColor: COLORS.accent, borderRadius: RADIUS.full },
-  roomHeader:     { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.xs },
-  roomDot:        { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.accent },
-  roomToggleBtn:  { marginLeft: 'auto', paddingHorizontal: SPACING.sm, paddingVertical: 3, borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.glassBorder },
-});
+function createStyles(colors: ThemeColors) {
+  const vx = StyleSheet.create({
+    container:       { flex: 1, backgroundColor: colors.background },
+    header:          { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: H_PAD, paddingTop: 56, paddingBottom: SPACING.md },
+    refreshBtn:      { width: 36, height: 36, borderRadius: RADIUS.full, backgroundColor: colors.glass, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.glassBorder },
+    scroll:          { padding: H_PAD, paddingBottom: 120, gap: SPACING.md },
+    centered:        { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING.xxxl, gap: SPACING.md },
+    totalsRow:       { flexDirection: 'row', gap: SPACING.sm },
+    totalsCard:      { flex: 1, backgroundColor: colors.surface, borderRadius: RADIUS.md, padding: SPACING.md, alignItems: 'center', borderWidth: 1, borderColor: colors.glassBorder },
+    card:            { backgroundColor: colors.surface, borderRadius: RADIUS.lg, padding: SPACING.xl, borderWidth: 1, borderColor: colors.glassBorder },
+    chartHeader:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: SPACING.sm },
+    rangeRow:        { flexDirection: 'row', gap: 4 },
+    rangeBtn:        { paddingHorizontal: SPACING.sm, paddingVertical: 5, borderRadius: RADIUS.sm, borderWidth: 1, borderColor: colors.glassBorder },
+    rangeBtnActive:  { backgroundColor: colors.accent, borderColor: colors.accent },
+    tilesGrid:       { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, marginTop: SPACING.md },
+    statTile:        { width: '47%', backgroundColor: colors.glass, borderRadius: RADIUS.md, padding: SPACING.md, borderWidth: 1, borderColor: colors.glassBorder, overflow: 'hidden' },
+    statTileBar:     { position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, backgroundColor: colors.glass },
+    statTileBarFill: { height: '100%', borderRadius: 2 },
+    retryBtn:        { paddingHorizontal: SPACING.xl, paddingVertical: SPACING.sm, backgroundColor: colors.accent, borderRadius: RADIUS.full },
+    roomHeader:     { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.xs },
+    roomDot:        { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.accent },
+    roomToggleBtn:  { marginLeft: 'auto', paddingHorizontal: SPACING.sm, paddingVertical: 3, borderRadius: RADIUS.full, borderWidth: 1, borderColor: colors.glassBorder },
+  });
 
-const tx = StyleSheet.create({
-  headerTitle:        { color: COLORS.text, fontSize: 24, fontWeight: FONTS.bold, letterSpacing: -0.3 },
-  refreshBtnText:     { color: COLORS.accent, fontSize: 18 },
-  totalsValue:        { color: COLORS.accent, fontSize: 22, fontWeight: FONTS.bold },
-  totalsLabel:        { color: COLORS.textSecondary, fontSize: 11, marginTop: 2, textAlign: 'center' },
-  cardTitle:          { color: COLORS.text, fontSize: 15, fontWeight: FONTS.semibold },
-  cardSubtitle:       { color: COLORS.textSecondary, fontSize: 12, marginTop: 2 },
-  rangeBtnText:       { color: COLORS.textMuted, fontSize: 11, fontWeight: FONTS.medium },
-  rangeBtnTextActive: { color: COLORS.text },
-  ganttLabel:         { color: COLORS.textSecondary, fontSize: 11, fontWeight: FONTS.medium },
-  axisLabel:          { color: COLORS.textMuted, fontSize: 9 },
-  statTileId:         { color: COLORS.textSecondary, fontSize: 13, fontWeight: FONTS.semibold },
-  statTilePct:        { fontSize: 20, fontWeight: FONTS.bold, marginTop: 2 },
-  statTileSub:        { color: COLORS.textMuted, fontSize: 11, marginTop: 1 },
-  errorText:          { color: COLORS.textSecondary, textAlign: 'center', fontSize: 14 },
-  retryBtnText:       { color: COLORS.text, fontWeight: FONTS.semibold },
-  emptyText:          { color: COLORS.textSecondary, fontSize: 15, textAlign: 'center' },
-  emptySubText:       { color: COLORS.textMuted, fontSize: 12, textAlign: 'center' },
-  footer:             { color: COLORS.textMuted, fontSize: 11, textAlign: 'center', marginTop: SPACING.sm },
-  roomToggleBtnText: { color: COLORS.textMuted, fontSize: 11 },
-});
+  const tx = StyleSheet.create({
+    headerTitle:        { color: colors.text, fontSize: 24, fontWeight: '700', letterSpacing: -0.3 },
+    refreshBtnText:     { color: colors.accent, fontSize: 18 },
+    totalsValue:        { color: colors.accent, fontSize: 22, fontWeight: '700' },
+    totalsLabel:        { color: colors.textSecondary, fontSize: 11, marginTop: 2, textAlign: 'center' },
+    cardTitle:          { color: colors.text, fontSize: 15, fontWeight: '600' },
+    cardSubtitle:       { color: colors.textSecondary, fontSize: 12, marginTop: 2 },
+    rangeBtnText:       { color: colors.textMuted, fontSize: 11, fontWeight: '500' },
+    rangeBtnTextActive: { color: colors.text },
+    ganttLabel:         { color: colors.textSecondary, fontSize: 11, fontWeight: '500' },
+    axisLabel:          { color: colors.textMuted, fontSize: 9 },
+    statTileId:         { color: colors.textSecondary, fontSize: 13, fontWeight: '600' },
+    statTilePct:        { fontSize: 20, fontWeight: '700', marginTop: 2 },
+    statTileSub:        { color: colors.textMuted, fontSize: 11, marginTop: 1 },
+    errorText:          { color: colors.textSecondary, textAlign: 'center', fontSize: 14 },
+    retryBtnText:       { color: colors.text, fontWeight: '600' },
+    emptyText:          { color: colors.textSecondary, fontSize: 15, textAlign: 'center' },
+    emptySubText:       { color: colors.textMuted, fontSize: 12, textAlign: 'center' },
+    footer:             { color: colors.textMuted, fontSize: 11, textAlign: 'center', marginTop: SPACING.sm },
+    roomToggleBtnText: { color: colors.textMuted, fontSize: 11 },
+  });
+
+  return { vx, tx };
+}
