@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 
+import { pingHealth } from '../api/devices';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { ThemeContextProvider, useTheme } from '../context/ThemeContext';
 
@@ -46,6 +47,10 @@ function ThemedNavigation() {
 }
 
 export default function RootLayout() {
+  useEffect(() => {
+    pingHealth().catch(() => {});
+  }, []);
+
   return (
     <AuthProvider>
       <ThemeContextProvider>

@@ -28,6 +28,7 @@ import BottomNav, { TabName } from '../components/BottomNav';
 import MasterControl from '../components/MasterControl';
 import ExpandedCabinModal from '../components/ExpandedCabinModal';
 import AdminUsersScreen from './AdminUsersScreen';
+import AnalyticsScreen from './AnalyticsScreen';
 import SchedulesScreen from './SchedulesScreen';
 import SettingsScreen from './SettingsScreen';
 import LogsScreen from './LogsScreen';
@@ -37,9 +38,9 @@ const NUM_COLUMNS = 2;
 
 const TIMING = { duration: 280, easing: Easing.out(Easing.cubic) };
 
-// Tab order: Home=0, Schedules=1, Users=2, Settings=3, Logs=4
-const ADMIN_OFFSETS: Record<TabName, number> = { home: 0, schedules: 1, users: 2, settings: 3, logs: 4 };
-const USER_OFFSETS:  Record<TabName, number> = { home: 0, schedules: 1, users: 0, settings: 0, logs: 0 };
+// Tab order: Home=0, Schedules=1, Analytics=2, Users=3, Settings=4, Logs=5
+const ADMIN_OFFSETS: Record<TabName, number> = { home: 0, schedules: 1, analytics: 2, users: 3, settings: 4, logs: 5 };
+const USER_OFFSETS:  Record<TabName, number> = { home: 0, schedules: 1, analytics: 0, users: 0, settings: 0, logs: 0 };
 const tabOffset = (tab: TabName, isAdmin: boolean): number =>
   (isAdmin ? ADMIN_OFFSETS : USER_OFFSETS)[tab];
 
@@ -64,7 +65,7 @@ const HomeScreen: React.FC = () => {
 
   // Ordered list of tabs visible to this user — used for swipe navigation
   const visibleTabs: TabName[] = isAdmin
-    ? ['home', 'schedules', 'users', 'settings', 'logs']
+    ? ['home', 'schedules', 'analytics', 'users', 'settings', 'logs']
     : ['home', 'schedules'];
 
   const handleSwipe = useCallback((translationX: number) => {
@@ -117,9 +118,14 @@ const HomeScreen: React.FC = () => {
     transform: [{ translateX: (3 - offset.value) * SCREEN_WIDTH }],
   }));
 
-  // Logs: always position 4 (admin only)
-  const logsAnimStyle = useAnimatedStyle(() => ({
+  // Settings: position 4 (admin only)
+  const settingsAnimStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: (4 - offset.value) * SCREEN_WIDTH }],
+  }));
+
+  // Logs: always position 5 (admin only)
+  const logsAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: (5 - offset.value) * SCREEN_WIDTH }],
   }));
 
   const visibleCabins = useMemo(

@@ -1,6 +1,6 @@
 import paho.mqtt.client as mqtt
-from config import MQTT_BROKER, MQTT_PORT
-from state import device_states
+from .config import MQTT_BROKER, MQTT_PASSWORD, MQTT_PORT, MQTT_USER
+from .state import device_states
 
 
 def _on_connect(client, userdata, flags, rc, properties):
@@ -24,6 +24,9 @@ def _on_message(client, userdata, msg):
 mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 mqtt_client.on_connect = _on_connect
 mqtt_client.on_message = _on_message
+
+if MQTT_USER and MQTT_PASSWORD:
+    mqtt_client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
 
 try:
     mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)

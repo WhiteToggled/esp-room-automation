@@ -5,11 +5,10 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 import sqlalchemy.dialects.sqlite.pysqlite as pysqlite
 import sqlalchemy.dialects.sqlite.pysqlcipher as pysqlcipher
 from sqlalchemy.dialects.sqlite.pysqlite import SQLiteDialect_pysqlite
-from config import DATABASE_URL
+from .config import DATABASE_URL
 
 
-# --- SQLAlchemy SQLite monkeypatch for pysqlcipher3 compatibility ---
-
+# SQLAlchemy SQLite monkeypatch for pysqlcipher3 compatibility
 def _custom_regexp(pattern, item):
     if item is None:
         return False
@@ -31,14 +30,10 @@ pysqlcipher.set_regexp = _set_regexp
 SQLiteDialect_pysqlite.on_connect = lambda self: _set_regexp
 
 
-# --- Engine & Session ---
-
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-
-# --- ORM Models ---
 
 class Device(Base):
     __tablename__ = "devices"
@@ -67,8 +62,6 @@ class Schedule(Base):
 
 Base.metadata.create_all(bind=engine)
 
-
-# --- DB Session Dependency ---
 
 def get_db():
     db = SessionLocal()

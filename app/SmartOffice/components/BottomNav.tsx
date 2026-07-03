@@ -5,7 +5,7 @@ import { RADIUS, SPACING, ThemeColors } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import FadeInView from './FadeInView';
 
-export type TabName = 'home' | 'users' | 'schedules' | 'settings' | 'logs';
+export type TabName = 'home' | 'schedules' | 'analytics' | 'users' | 'settings' | 'logs';
 
 interface Tab {
   name: TabName;

@@ -7,21 +7,27 @@ services:
       - .env
     environment:
       - MQTT_BROKER=mqtt-broker
+      - DATA_DIR=/data
     depends_on:
       - mqtt-broker
     volumes:
-      - ./automation.db:/app/automation.db
+      - app-data:/data
 
   mqtt-broker:
     image: eclipse-mosquitto:latest
     ports:
       - "1883:1883"
       - "9001:9001"
+    env_file:
+      - .env
+    entrypoint: ["/mosquitto-entrypoint.sh"]
     volumes:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - ./mosquitto-entrypoint.sh:/mosquitto-entrypoint.sh
       - mosquitto-data:/mosquitto/data
       - mosquitto-log:/mosquitto/log
 
 volumes:
+  app-data:
   mosquitto-data:
   mosquitto-log:

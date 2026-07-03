@@ -1,5 +1,9 @@
 import client from './client';
 
+export async function pingHealth(): Promise<{ status: string }> {
+  return client.get('/health');
+}
+
 export interface Schedule {
   id: number;
   device_id: string;
@@ -93,4 +97,8 @@ export async function createUser(username: string, password: string): Promise<{ 
 
 export async function deleteUser(username: string): Promise<void> {
   return client.del(`/users/${encodeURIComponent(username)}`);
+}
+
+export async function changePassword(username: string, newPassword: string): Promise<{ detail: string }> {
+  return client.post('/change-password', { username, new_password: newPassword });
 }

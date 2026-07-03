@@ -1,4 +1,3 @@
-import os
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -7,25 +6,15 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
 
-from config import ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM, SECRET_KEY
-from users_db import get_persisted_user
+from .config import ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM, SECRET_KEY
+from .users_db import get_persisted_user
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
-# Hardcoded superuser — all other accounts live in users.db
-USERS_DB = {
-    "admin": {
-        "username": "admin",
-        "hashed_password": pwd_context.hash(os.environ["ADMIN_PASSWORD"]),
-        "role": "admin",
-        "rooms": [],
-    },
-}
-
 
 def get_user(username: str) -> Optional[dict]:
-    return USERS_DB.get(username) or get_persisted_user(username)
+    return get_persisted_user(username)
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:

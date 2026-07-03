@@ -3,17 +3,16 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from auth import can_access_room, get_current_user, get_room_from_device, require_admin
-from database import Device, get_db
-from mqtt import mqtt_client
-from schemas import ToggleResponse
-from state import device_states
+from ..auth import can_access_room, get_current_user, get_room_from_device, require_admin
+from ..database import Device, get_db
+from ..mqtt import mqtt_client
+from ..schemas import ToggleResponse
+from ..state import device_states
 
 router = APIRouter(tags=["Control"])
 
 
 def _device_type(device_id: str) -> Optional[str]:
-    """Returns the type prefix of the device (e.g. 'l' for lights, 'f' for fans)."""
     parts = device_id.split("/")
     return parts[1][0] if len(parts) >= 2 and parts[1] else None
 
@@ -31,7 +30,6 @@ def toggle_device(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """Toggle a device. Users may only control devices in their assigned room(s)."""
     room = get_room_from_device(device_id)
     if room and not can_access_room(current_user, room):
         raise HTTPException(
@@ -53,7 +51,6 @@ def toggle_all(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_admin),
 ):
-    """Toggle all registered devices. Admin only."""
     devices = db.query(Device).all()
     if not devices:
         return {"message": "No devices to toggle"}
@@ -72,7 +69,6 @@ def lights_on(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_admin),
 ):
-    """Turn on all light devices. Admin only."""
     lights = [d for d in db.query(Device).all() if _device_type(d.id) == "l"]
     count = _set_devices(lights, 1)
     return {"message": "All lights turned on", "count": count}
@@ -83,7 +79,6 @@ def fans_on(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_admin),
 ):
-    """Turn on all fan devices. Admin only."""
     fans = [d for d in db.query(Device).all() if _device_type(d.id) == "f"]
     count = _set_devices(fans, 1)
     return {"message": "All fans turned on", "count": count}
@@ -94,7 +89,6 @@ def all_off(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_admin),
 ):
-    """Turn off all devices. Admin only."""
     devices = db.query(Device).all()
     count = _set_devices(devices, 0)
     return {"message": "All devices turned off", "count": count}
