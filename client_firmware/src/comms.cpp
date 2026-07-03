@@ -28,9 +28,12 @@ void connect_to_wifi() {
     strcpy(mqtt_client_id, pref_client_id.c_str());
 
     WiFiManager wm;
+    wm.setConfigPortalBlocking(false);
     wm.setSaveConfigCallback(update_cfg_callback);
+    wm.setConnectTimeout(10);
 
-    WiFiManagerParameter param_mqtt_server("server", "MQTT Server IP", mqtt_server, 40);
+    WiFiManagerParameter param_mqtt_server("server", "MQTT Server IP",
+                                           mqtt_server, 40);
     WiFiManagerParameter param_mqtt_port("port", "MQTT Port", mqtt_port, 6);
     WiFiManagerParameter param_mqtt_id("client_id", "MQTT Client ID",
                                        mqtt_client_id, 40);
@@ -43,9 +46,11 @@ void connect_to_wifi() {
     digitalWrite(STATUS_LED, HIGH);
 
     if (!wm.autoConnect("Nestboard-Setup")) {
-        Serial.println("Config Portal timeout or failure. Restarting...");
-        delay(3000);
-        ESP.restart();
+        Serial.println( "Config Portal timeout or failure. Starting offline ...");
+        digitalWrite(STATUS_LED, LOW);
+        return;
+        // delay(3000);
+        // ESP.restart();
     }
 
     digitalWrite(STATUS_LED, LOW);
@@ -87,7 +92,9 @@ void mqtt_reconnect() {
     Serial.print("MQTT connection lost, reconnecting...");
     if (client.connect(mqtt_client_id)) {
         Serial.println("MQTT Connected!");
-        client.subscribe("#");
+        for (int i = 0; i < N_DEVICES; i++) {
+            client.subscribe(MQTT_TOPICS[i]);
+        }
     } else {
         Serial.printf("MQTT Failed, rc=%d. Try again in 5 seconds.\n",
                       client.state());
@@ -106,9 +113,18 @@ void callback(char *topic, byte *payload, unsigned int length) {
 
     int target_state = atoi(message);
     target_state = !target_state;
-    for (int i = 0; i < 8; ++i) {
+    for (int i = 0; i < N_DEVICES; ++i) {
         if (strcmp(topic, MQTT_TOPICS[i]) == 0) {
+            if (digitalRead(RELAY_PINS[i]) == target_state)
+                break;
+
             digitalWrite(RELAY_PINS[i], target_state);
+            // save to memory
+            prefs.begin("relay-states", false);
+            char key[4];
+            snprintf(key, sizeof(key), "r%d", i + 1);
+            prefs.putInt(key, target_state);
+            prefs.end();
         }
     }
 }
