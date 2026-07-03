@@ -36,3 +36,7 @@ archive.zip
 .DS_Store
 
 .codspeed
+
+# secrets
+server/.env
+*.db

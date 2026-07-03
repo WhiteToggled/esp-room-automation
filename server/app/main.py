@@ -3,7 +3,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from .config import LOG_INTERVAL_MINUTES
-from .database import Device, SessionLocal
+from .database import Device, DeviceState, SessionLocal
+from .state import device_states
 from .mqtt import mqtt_client
 from .routers import admin, auth, control, monitoring, schedules
 from .scheduler import scheduler
@@ -28,6 +29,8 @@ async def lifespan(app: FastAPI):
         for name in existing - desired:
             db.query(Device).filter(Device.id == name).delete()
         db.commit()
+        for ds in db.query(DeviceState).all():
+            device_states[ds.device_id] = ds.state
     finally:
         db.close()
 

@@ -1,5 +1,9 @@
+import ssl
+
 import paho.mqtt.client as mqtt
-from .config import MQTT_BROKER, MQTT_PASSWORD, MQTT_PORT, MQTT_USER
+
+from .config import MQTT_BROKER, MQTT_PASSWORD, MQTT_PORT, MQTT_TLS, MQTT_USER
+from .database import SessionLocal, save_device_state
 from .state import device_states
 
 
@@ -15,7 +19,13 @@ def _on_message(client, userdata, msg):
     try:
         payload = msg.payload.decode()
         if payload in ["0", "1"]:
-            device_states[msg.topic] = int(payload)
+            state = int(payload)
+            device_states[msg.topic] = state
+            db = SessionLocal()
+            try:
+                save_device_state(db, msg.topic, state)
+            finally:
+                db.close()
             print(f"State updated: {msg.topic} -> {payload}")
     except Exception as e:
         print(f"Error processing MQTT message on {msg.topic}: {e}")
@@ -27,6 +37,9 @@ mqtt_client.on_message = _on_message
 
 if MQTT_USER and MQTT_PASSWORD:
     mqtt_client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
+
+if MQTT_TLS:
+    mqtt_client.tls_set(cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLS_CLIENT)
 
 try:
     mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)

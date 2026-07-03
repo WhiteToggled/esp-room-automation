@@ -1,12 +1,12 @@
 import os
-import sqlite3
 from typing import Dict, List, Optional
 
+import psycopg2
+import psycopg2.extras
 from passlib.context import CryptContext
 
-from .config import DATA_DIR
+from .config import DATABASE_URL
 
-USERS_DB_PATH = os.path.join(DATA_DIR, "users.db")
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
@@ -20,14 +20,18 @@ def _serialize_rooms(rooms: List[str]) -> str:
     return ",".join(rooms)
 
 
+def _connect():
+    return psycopg2.connect(DATABASE_URL)
+
+
 def init_users_db():
-    con = sqlite3.connect(USERS_DB_PATH)
+    con = _connect()
     try:
         cur = con.cursor()
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 role TEXT NOT NULL DEFAULT 'user',
@@ -35,16 +39,13 @@ def init_users_db():
             )
             """
         )
-        try:
-            cur.execute("ALTER TABLE users ADD COLUMN room TEXT")
-        except sqlite3.OperationalError:
-            pass  # column already exists
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS room TEXT")
 
         cur.execute("SELECT 1 FROM users WHERE username = 'admin'")
         if not cur.fetchone():
             admin_password = os.getenv("ADMIN_PASSWORD", "1234")
             cur.execute(
-                "INSERT INTO users (username, password_hash, role, room) VALUES (?, ?, ?, ?)",
+                "INSERT INTO users (username, password_hash, role, room) VALUES (%s, %s, %s, %s)",
                 ("admin", _pwd_context.hash(admin_password), "admin", ""),
             )
 
@@ -54,11 +55,11 @@ def init_users_db():
 
 
 def get_persisted_user(username: str) -> Optional[Dict]:
-    con = sqlite3.connect(USERS_DB_PATH)
+    con = _connect()
     try:
         cur = con.cursor()
         cur.execute(
-            "SELECT username, password_hash, role, room FROM users WHERE username = ?",
+            "SELECT username, password_hash, role, room FROM users WHERE username = %s",
             (username,),
         )
         row = cur.fetchone()
@@ -80,11 +81,11 @@ def persist_user(
     role: str = "user",
     rooms: Optional[List[str]] = None,
 ) -> None:
-    con = sqlite3.connect(USERS_DB_PATH)
+    con = _connect()
     try:
         cur = con.cursor()
         cur.execute(
-            "INSERT INTO users (username, password_hash, role, room) VALUES (?, ?, ?, ?)",
+            "INSERT INTO users (username, password_hash, role, room) VALUES (%s, %s, %s, %s)",
             (username, password_hash, role, _serialize_rooms(rooms or [])),
         )
         con.commit()
@@ -93,11 +94,11 @@ def persist_user(
 
 
 def update_user_rooms(username: str, rooms: List[str]) -> bool:
-    con = sqlite3.connect(USERS_DB_PATH)
+    con = _connect()
     try:
         cur = con.cursor()
         cur.execute(
-            "UPDATE users SET room = ? WHERE username = ?",
+            "UPDATE users SET room = %s WHERE username = %s",
             (_serialize_rooms(rooms), username),
         )
         con.commit()
@@ -106,8 +107,22 @@ def update_user_rooms(username: str, rooms: List[str]) -> bool:
         con.close()
 
 
+def update_user_password(username: str, new_password_hash: str) -> bool:
+    con = _connect()
+    try:
+        cur = con.cursor()
+        cur.execute(
+            "UPDATE users SET password_hash = %s WHERE username = %s",
+            (new_password_hash, username),
+        )
+        con.commit()
+        return cur.rowcount > 0
+    finally:
+        con.close()
+
+
 def list_all_users() -> List[Dict]:
-    con = sqlite3.connect(USERS_DB_PATH)
+    con = _connect()
     try:
         cur = con.cursor()
         cur.execute("SELECT username, role, room FROM users ORDER BY username")
@@ -119,25 +134,11 @@ def list_all_users() -> List[Dict]:
         con.close()
 
 
-def update_user_password(username: str, new_password_hash: str) -> bool:
-    con = sqlite3.connect(USERS_DB_PATH)
-    try:
-        cur = con.cursor()
-        cur.execute(
-            "UPDATE users SET password_hash = ? WHERE username = ?",
-            (new_password_hash, username),
-        )
-        con.commit()
-        return cur.rowcount > 0
-    finally:
-        con.close()
-
-
 def remove_user(username: str) -> bool:
-    con = sqlite3.connect(USERS_DB_PATH)
+    con = _connect()
     try:
         cur = con.cursor()
-        cur.execute("DELETE FROM users WHERE username = ?", (username,))
+        cur.execute("DELETE FROM users WHERE username = %s", (username,))
         con.commit()
         return cur.rowcount > 0
     finally:

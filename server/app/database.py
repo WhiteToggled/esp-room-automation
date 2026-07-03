@@ -1,36 +1,10 @@
-import re
 from datetime import datetime
 from sqlalchemy import create_engine, Column, String, Integer, DateTime, Text
-from sqlalchemy.orm import sessionmaker, declarative_base
-import sqlalchemy.dialects.sqlite.pysqlite as pysqlite
-import sqlalchemy.dialects.sqlite.pysqlcipher as pysqlcipher
-from sqlalchemy.dialects.sqlite.pysqlite import SQLiteDialect_pysqlite
+from sqlalchemy.orm import Session, sessionmaker, declarative_base
 from .config import DATABASE_URL
 
 
-# SQLAlchemy SQLite monkeypatch for pysqlcipher3 compatibility
-def _custom_regexp(pattern, item):
-    if item is None:
-        return False
-    try:
-        return re.search(pattern, str(item), re.I) is not None
-    except Exception:
-        return False
-
-
-def _set_regexp(dbapi_connection):
-    try:
-        dbapi_connection.create_function("REGEXP", 2, _custom_regexp, deterministic=True)
-    except TypeError:
-        dbapi_connection.create_function("REGEXP", 2, _custom_regexp)
-
-
-pysqlite.set_regexp = _set_regexp
-pysqlcipher.set_regexp = _set_regexp
-SQLiteDialect_pysqlite.on_connect = lambda self: _set_regexp
-
-
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -38,6 +12,18 @@ Base = declarative_base()
 class Device(Base):
     __tablename__ = "devices"
     id = Column(String, primary_key=True, index=True)
+
+
+class DeviceState(Base):
+    __tablename__ = "device_states"
+    device_id = Column(String, primary_key=True)
+    state = Column(Integer, nullable=False, default=0)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+def save_device_state(db: Session, device_id: str, state: int) -> None:
+    db.merge(DeviceState(device_id=device_id, state=state, updated_at=datetime.utcnow()))
+    db.commit()
 
 
 class StateLog(Base):

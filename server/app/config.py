@@ -3,14 +3,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DB_PASSPHRASE = os.environ["DB_PASSPHRASE"]
-DATA_DIR = os.getenv("DATA_DIR", ".")
-DATABASE_URL = f"sqlite+pysqlcipher://:{DB_PASSPHRASE}@/{DATA_DIR}/automation.db"
+DATABASE_URL = os.environ["DATABASE_URL"]
 
 MQTT_BROKER = os.getenv("MQTT_BROKER", "localhost")
 MQTT_PORT = int(os.getenv("MQTT_PORT", 1883))
 MQTT_USER = os.getenv("MQTT_USER")
 MQTT_PASSWORD = os.getenv("MQTT_PASSWORD")
+MQTT_TLS = os.getenv("MQTT_TLS", "false").lower() == "true"
 LOG_INTERVAL_MINUTES = int(os.getenv("LOG_INTERVAL_MINUTES", 5))
 
 SECRET_KEY = os.environ["JWT_SECRET_KEY"]

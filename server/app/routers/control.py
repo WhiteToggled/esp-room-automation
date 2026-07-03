@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from ..auth import can_access_room, get_current_user, get_room_from_device, require_admin
-from ..database import Device, get_db
+from ..database import Device, get_db, save_device_state
 from ..mqtt import mqtt_client
 from ..schemas import ToggleResponse
 from ..state import device_states
@@ -17,10 +17,12 @@ def _device_type(device_id: str) -> Optional[str]:
     return parts[1][0] if len(parts) >= 2 and parts[1] else None
 
 
-def _set_devices(devices: List[Device], state: int) -> int:
+def _set_devices(devices: List[Device], state: int, db: Session = None) -> int:
     for device in devices:
         device_states[device.id] = state
         mqtt_client.publish(device.id, str(state), qos=1, retain=True)
+        if db:
+            save_device_state(db, device.id, state)
     return len(devices)
 
 
@@ -43,6 +45,7 @@ def toggle_device(
     new_state = 0 if device_states.get(device_id, 0) else 1
     device_states[device_id] = new_state
     mqtt_client.publish(device_id, str(new_state), qos=1, retain=True)
+    save_device_state(db, device_id, new_state)
     return {"id": device_id, "new_state": new_state}
 
 
@@ -60,6 +63,7 @@ def toggle_all(
     for device in devices:
         device_states[device.id] = target_state
         mqtt_client.publish(device.id, str(target_state), qos=1, retain=True)
+        save_device_state(db, device.id, target_state)
 
     return {"message": f"All devices set to {target_state}", "count": len(devices), "new_state": target_state}
 
@@ -70,7 +74,7 @@ def lights_on(
     current_user: dict = Depends(require_admin),
 ):
     lights = [d for d in db.query(Device).all() if _device_type(d.id) == "l"]
-    count = _set_devices(lights, 1)
+    count = _set_devices(lights, 1, db)
     return {"message": "All lights turned on", "count": count}
 
 
@@ -80,7 +84,7 @@ def fans_on(
     current_user: dict = Depends(require_admin),
 ):
     fans = [d for d in db.query(Device).all() if _device_type(d.id) == "f"]
-    count = _set_devices(fans, 1)
+    count = _set_devices(fans, 1, db)
     return {"message": "All fans turned on", "count": count}
 
 
@@ -90,5 +94,5 @@ def all_off(
     current_user: dict = Depends(require_admin),
 ):
     devices = db.query(Device).all()
-    count = _set_devices(devices, 0)
+    count = _set_devices(devices, 0, db)
     return {"message": "All devices turned off", "count": count}

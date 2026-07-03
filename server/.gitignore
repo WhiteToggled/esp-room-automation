@@ -36,3 +36,4 @@ archive.zip
 
 # SQLite databases
 *.db
+.env
