@@ -26,7 +26,6 @@ def _on_message(client, userdata, msg):
                 save_device_state(db, msg.topic, state)
             finally:
                 db.close()
-            print(f"State updated: {msg.topic} -> {payload}")
     except Exception as e:
         print(f"Error processing MQTT message on {msg.topic}: {e}")
 

@@ -19,3 +19,6 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
 CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
 
 VALID_DAYS = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
+
+OTA_FIRMWARE_DIR = os.getenv("OTA_FIRMWARE_DIR", "firmware")
+SERVER_BASE_URL = os.getenv("SERVER_BASE_URL", "http://localhost:8000")

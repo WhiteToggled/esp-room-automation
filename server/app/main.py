@@ -7,7 +7,7 @@ from .config import CORS_ORIGINS, LOG_INTERVAL_MINUTES
 from .database import Device, DeviceState, SessionLocal
 from .state import device_states
 from .mqtt import mqtt_client
-from .routers import admin, auth, control, monitoring, schedules
+from .routers import admin, auth, control, monitoring, ota, schedules
 from .scheduler import scheduler
 from .users_db import init_users_db
 
@@ -66,6 +66,7 @@ app.include_router(admin.router)
 app.include_router(control.router)
 app.include_router(monitoring.router)
 app.include_router(schedules.router)
+app.include_router(ota.router)
 
 
 @app.get("/health")
