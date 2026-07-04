@@ -1,8 +1,9 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-from .config import LOG_INTERVAL_MINUTES
+from .config import CORS_ORIGINS, LOG_INTERVAL_MINUTES
 from .database import Device, DeviceState, SessionLocal
 from .state import device_states
 from .mqtt import mqtt_client
@@ -51,6 +52,14 @@ app = FastAPI(
     description="Control lights and fans via MQTT and SQLCipher, with per-user lighting schedules and RBAC.",
     version="4.0.0",
     lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(auth.router)
