@@ -9,10 +9,10 @@ from .state import device_states
 
 def _on_connect(client, userdata, flags, rc, properties):
     if rc == 0:
-        print("Connected to MQTT Broker!")
+        print(f"MQTT connected to broker, subscribed to all topics")
         client.subscribe("#")
     else:
-        print(f"Failed to connect to MQTT broker, return code {rc}")
+        print(f"MQTT connect failed (rc={rc})")
 
 
 def _on_message(client, userdata, msg):
@@ -20,6 +20,7 @@ def _on_message(client, userdata, msg):
         payload = msg.payload.decode()
         if payload in ["0", "1"]:
             state = int(payload)
+            print(f"MQTT ← {msg.topic} = {'ON' if state else 'OFF'}")
             device_states[msg.topic] = state
             db = SessionLocal()
             try:
@@ -27,7 +28,7 @@ def _on_message(client, userdata, msg):
             finally:
                 db.close()
     except Exception as e:
-        print(f"Error processing MQTT message on {msg.topic}: {e}")
+        print(f"MQTT error on {msg.topic}: {e}")
 
 
 mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)

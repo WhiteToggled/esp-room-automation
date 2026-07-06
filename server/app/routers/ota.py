@@ -45,6 +45,7 @@ async def upload_firmware(
     with open(_firmware_path(device), "wb") as f:
         f.write(contents)
 
+    print(f"OTA device {device}: firmware uploaded ({len(contents)} bytes)")
     return {
         "message": f"Firmware saved for device {device}",
         "size_bytes": len(contents),
@@ -63,11 +64,13 @@ async def trigger_update(
         raise HTTPException(status_code=404, detail=f"No firmware uploaded for device {device}")
 
     firmware_url = f"{SERVER_BASE_URL.rstrip('/')}/ota/firmware/{device}"
-    mqtt_client.publish(_ota_topic(device), firmware_url)
+    topic = _ota_topic(device)
+    print(f"OTA device {device}: trigger → {topic}")
+    mqtt_client.publish(topic, firmware_url)
 
     return {
         "message": f"Firmware URL published for device {device}",
-        "topic": _ota_topic(device),
+        "topic": topic,
         "url": firmware_url,
     }
 

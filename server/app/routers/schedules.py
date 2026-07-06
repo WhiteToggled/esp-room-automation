@@ -54,6 +54,7 @@ def create_schedule(
     db.add(sched)
     db.commit()
     db.refresh(sched)
+    print(f"[{current_user['username']}] schedule #{sched.id} created: {sched.device_id} {'ON' if sched.action else 'OFF'} @ {sched.hour:02d}:{sched.minute:02d} [{sched.days}]")
     return _to_response(sched)
 
 
@@ -136,4 +137,5 @@ def delete_schedule(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
     db.delete(sched)
     db.commit()
+    print(f"[{current_user['username']}] schedule #{schedule_id} deleted ({sched.device_id})")
     return {"message": f"Schedule {schedule_id} deleted"}

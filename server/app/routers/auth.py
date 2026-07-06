@@ -20,11 +20,13 @@ class ChangePasswordRequest(BaseModel):
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     user = get_user(form_data.username)
     if not user or not pwd_context.verify(form_data.password, user["hashed_password"]):
+        print(f"login FAIL: {form_data.username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    print(f"login OK: {user['username']} ({user.get('role', 'user')})")
     access_token = create_access_token(
         data={"sub": user["username"]},
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),

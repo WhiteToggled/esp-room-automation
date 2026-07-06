@@ -42,9 +42,12 @@ def toggle_device(
     if not device:
         raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
 
-    new_state = 0 if device_states.get(device_id, 0) else 1
+    old_state = device_states.get(device_id, 0)
+    new_state = 0 if old_state else 1
+    print(f"[{current_user['username']}] toggle {device_id}: {'ON' if old_state else 'OFF'} → {'ON' if new_state else 'OFF'}")
     device_states[device_id] = new_state
     mqtt_client.publish(device_id, str(new_state), qos=1, retain=True)
+    print(f"MQTT → {device_id} = {'ON' if new_state else 'OFF'}")
     save_device_state(db, device_id, new_state)
     return {"id": device_id, "new_state": new_state}
 
@@ -60,6 +63,7 @@ def toggle_all(
 
     any_off = any(device_states.get(d.id, 0) == 0 for d in devices)
     target_state = 1 if any_off else 0
+    print(f"[{current_user['username']}] toggle-all → {'ON' if target_state else 'OFF'} ({len(devices)} devices)")
     for device in devices:
         device_states[device.id] = target_state
         mqtt_client.publish(device.id, str(target_state), qos=1, retain=True)
@@ -74,6 +78,7 @@ def lights_on(
     current_user: dict = Depends(require_admin),
 ):
     lights = [d for d in db.query(Device).all() if _device_type(d.id) == "l"]
+    print(f"[{current_user['username']}] lights on ({len(lights)} devices)")
     count = _set_devices(lights, 1, db)
     return {"message": "All lights turned on", "count": count}
 
@@ -84,6 +89,7 @@ def fans_on(
     current_user: dict = Depends(require_admin),
 ):
     fans = [d for d in db.query(Device).all() if _device_type(d.id) == "f"]
+    print(f"[{current_user['username']}] fans on ({len(fans)} devices)")
     count = _set_devices(fans, 1, db)
     return {"message": "All fans turned on", "count": count}
 
@@ -94,5 +100,6 @@ def all_off(
     current_user: dict = Depends(require_admin),
 ):
     devices = db.query(Device).all()
+    print(f"[{current_user['username']}] all off ({len(devices)} devices)")
     count = _set_devices(devices, 0, db)
     return {"message": "All devices turned off", "count": count}

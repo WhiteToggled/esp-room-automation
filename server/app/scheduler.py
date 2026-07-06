@@ -19,7 +19,8 @@ def log_device_states():
         entry = StateLog(logged_at=datetime.utcnow(), snapshot=json.dumps(snapshot))
         db.add(entry)
         db.commit()
-        print(f"[{entry.logged_at.isoformat()}] State snapshot logged: {snapshot}")
+        on_count = sum(1 for v in snapshot.values() if v)
+        print(f"snapshot: {on_count}/{len(snapshot)} devices ON")
     except Exception as e:
         print(f"State logger error: {e}")
         db.rollback()
@@ -48,7 +49,7 @@ def run_scheduled_actions():
                 continue
             device_states[sched.device_id] = sched.action
             mqtt_client.publish(sched.device_id, str(sched.action), qos=1, retain=True)
-            print(f"[Scheduler] id={sched.id} {sched.device_id} -> {sched.action}")
+            print(f"[scheduler] {sched.device_id} = {'ON' if sched.action else 'OFF'} (schedule #{sched.id})")
     except Exception as e:
         print(f"Schedule runner error: {e}")
     finally:
