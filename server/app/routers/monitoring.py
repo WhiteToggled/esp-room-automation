@@ -9,7 +9,7 @@ from ..auth import get_current_user, get_room_from_device
 from ..database import Device, StateLog, get_db
 from ..scheduler import log_device_states
 from ..schemas import LogBucket, StateLogEntry
-from ..state import device_states
+from ..state import device_states, room_names
 
 router = APIRouter(tags=["Monitoring"])
 
@@ -27,16 +27,21 @@ def get_all_states(
 ):
     devices = db.query(Device).all()
     if current_user.get("role") == "admin":
-        return {d.id: device_states.get(d.id, 0) for d in devices}
+        states = {d.id: device_states.get(d.id, 0) for d in devices}
+        visible_rooms = {get_room_from_device(d.id) for d in devices}
+    else:
+        user_rooms = set(current_user.get("rooms") or [])
+        if not user_rooms:
+            return {"states": {}, "names": {}}
+        states = {
+            d.id: device_states.get(d.id, 0)
+            for d in devices
+            if get_room_from_device(d.id) in user_rooms
+        }
+        visible_rooms = user_rooms
 
-    user_rooms = set(current_user.get("rooms") or [])
-    if not user_rooms:
-        return {}
-    return {
-        d.id: device_states.get(d.id, 0)
-        for d in devices
-        if get_room_from_device(d.id) in user_rooms
-    }
+    names = {rid: room_names.get(rid, rid) for rid in visible_rooms if rid}
+    return {"states": states, "names": names}
 
 
 @router.get("/logs", response_model=List[StateLogEntry])

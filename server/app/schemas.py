@@ -38,6 +38,10 @@ class UserRoomsUpdate(BaseModel):
     rooms: List[str]
 
 
+class RenameRoomRequest(BaseModel):
+    name: str
+
+
 class ScheduleResponse(BaseModel):
     id: int
     device_id: str

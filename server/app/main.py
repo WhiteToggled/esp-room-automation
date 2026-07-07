@@ -4,18 +4,27 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import CORS_ORIGINS, LOG_INTERVAL_MINUTES
-from .database import Device, DeviceState, SessionLocal
-from .state import device_states
+from .database import Device, DeviceState, RoomName, SessionLocal
+from .state import device_states, room_names
 from .mqtt import mqtt_client
 from .routers import admin, auth, control, monitoring, ota, schedules
 from .scheduler import scheduler
 from .users_db import init_users_db
+from .auth import get_room_from_device
 
 INITIAL_DEVICES = [
-    "r1/l1", "r2/l1", "r3/l1", "r4/l1",
-    "r5/l1", "r6/l1", "r7/l1", "r8/l1",
-    "r1/f1", "r2/f1", "r3/f1", "r4/f1",
-    "r5/f1", "r6/f1", "r7/f1", "r8/f1",
+    "r1/l1",
+    "r2/l1",
+    "r3/l1",
+    "r4/l1",
+    "r5/l1",
+    "r6/l1",
+    "r1/f1",
+    "r2/f1",
+    "r3/f1",
+    "r4/f1",
+    "r5/f1",
+    "r6/f1",
 ]
 
 
@@ -32,6 +41,15 @@ async def lifespan(app: FastAPI):
         db.commit()
         for ds in db.query(DeviceState).all():
             device_states[ds.device_id] = ds.state
+
+        all_room_ids = {get_room_from_device(did) for did in desired if get_room_from_device(did)}
+        existing_room_names = {rn.room_id for rn in db.query(RoomName).all()}
+        for room_id in all_room_ids:
+            if room_id not in existing_room_names:
+                db.add(RoomName(room_id=room_id, name=room_id))
+        db.commit()
+        for rn in db.query(RoomName).all():
+            room_names[rn.room_id] = rn.name
     finally:
         db.close()
 
