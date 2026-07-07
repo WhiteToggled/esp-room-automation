@@ -6,7 +6,7 @@ from pydantic import BaseModel, field_validator
 from .config import VALID_DAYS
 
 
-class ToggleResponse(BaseModel):
+class SetResponse(BaseModel):
     id: str
     new_state: int
     affected_ids: List[str] = []
