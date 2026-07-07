@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..auth import get_current_user, pwd_context, require_admin
-from ..database import RoomName, get_db
-from ..schemas import RenameRoomRequest, UserCreate, UserRoomsUpdate
-from ..state import room_names
+from ..database import DeviceGroup, RoomName, get_db
+from ..schemas import DeviceGroupCreate, DeviceGroupResponse, RenameRoomRequest, UserCreate, UserRoomsUpdate
+from ..state import device_to_group, group_to_devices, room_names
 from ..users_db import (
     get_persisted_user,
     list_all_users,
@@ -95,3 +95,63 @@ def rename_room(
     db.commit()
     room_names[room_id] = name
     return {"room_id": room_id, "name": name}
+
+
+def _group_to_response(g: DeviceGroup) -> DeviceGroupResponse:
+    return DeviceGroupResponse(
+        id=g.id,
+        mqtt_topic=g.mqtt_topic,
+        device_ids=[d.strip() for d in g.device_ids.split(",") if d.strip()],
+    )
+
+
+@router.get("/groups", response_model=list[DeviceGroupResponse])
+def list_groups(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_admin),
+):
+    return [_group_to_response(g) for g in db.query(DeviceGroup).order_by(DeviceGroup.id).all()]
+
+
+@router.post("/groups", response_model=DeviceGroupResponse, status_code=201)
+def create_group(
+    data: DeviceGroupCreate,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_admin),
+):
+    if db.query(DeviceGroup).filter(DeviceGroup.mqtt_topic == data.mqtt_topic).first():
+        raise HTTPException(status_code=400, detail=f"Group with topic '{data.mqtt_topic}' already exists")
+
+    already_grouped = [d for d in data.device_ids if d in device_to_group]
+    if already_grouped:
+        raise HTTPException(status_code=400, detail=f"Devices already in a group: {already_grouped}")
+
+    g = DeviceGroup(mqtt_topic=data.mqtt_topic, device_ids=",".join(data.device_ids))
+    db.add(g)
+    db.commit()
+    db.refresh(g)
+
+    group_to_devices[g.mqtt_topic] = list(data.device_ids)
+    for device_id in data.device_ids:
+        device_to_group[device_id] = g.mqtt_topic
+
+    return _group_to_response(g)
+
+
+@router.delete("/groups/{group_id}")
+def delete_group(
+    group_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_admin),
+):
+    g = db.query(DeviceGroup).filter(DeviceGroup.id == group_id).first()
+    if not g:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    members = group_to_devices.pop(g.mqtt_topic, [])
+    for device_id in members:
+        device_to_group.pop(device_id, None)
+
+    db.delete(g)
+    db.commit()
+    return {"message": f"Group {group_id} deleted", "mqtt_topic": g.mqtt_topic}

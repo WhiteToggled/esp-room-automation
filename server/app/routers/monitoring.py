@@ -9,7 +9,7 @@ from ..auth import get_current_user, get_room_from_device
 from ..database import Device, StateLog, get_db
 from ..scheduler import log_device_states
 from ..schemas import LogBucket, StateLogEntry
-from ..state import device_states, room_names
+from ..state import device_states, group_to_devices, room_names
 
 router = APIRouter(tags=["Monitoring"])
 
@@ -41,7 +41,11 @@ def get_all_states(
         visible_rooms = user_rooms
 
     names = {rid: room_names.get(rid, rid) for rid in visible_rooms if rid}
-    return {"states": states, "names": names}
+    groups = [
+        {"mqtt_topic": topic, "device_ids": members}
+        for topic, members in group_to_devices.items()
+    ]
+    return {"states": states, "names": names, "groups": groups}
 
 
 @router.get("/logs", response_model=List[StateLogEntry])
