@@ -17,7 +17,7 @@ char mqtt_username[64] = "test";
 char mqtt_pass[32] = "testtest";
 char mqtt_server[128] = "8d05a36cd6004e98b1164a0f2d05cbba.s1.eu.hivemq.cloud";
 char mqtt_port[6] = "8883";
-char mqtt_client_id[64] = "ESP32_Nestboard";
+// char mqtt_client_id[64] = "ESP32_Nestboard_1";
 bool update_config = false;
 
 WiFiManagerParameter param_mqtt_user("username", "MQTT Username", mqtt_username,
@@ -40,14 +40,16 @@ void connect_to_wifi() {
     String pref_server = prefs.getString(
         "mq_server", "8d05a36cd6004e98b1164a0f2d05cbba.s1.eu.hivemq.cloud");
     String pref_port = prefs.getString("mq_port", "8883");
-    String pref_client_id = prefs.getString("mq_id", "ESP32_Nestboard");
+    String pref_client_id = prefs.getString("mq_id", mqtt_client_id);
 
     strcpy(mqtt_username, pref_username.c_str());
     strcpy(mqtt_pass, pref_pass.c_str());
+    digitalWrite(STATUS_LED, HIGH);
     strcpy(mqtt_server, pref_server.c_str());
     strcpy(mqtt_port, pref_port.c_str());
     strcpy(mqtt_client_id, pref_client_id.c_str());
 
+    wm.setConfigPortalTimeout(120);
     wm.setConfigPortalBlocking(false);
     wm.setSaveConfigCallback(update_cfg_callback);
     wm.setConnectTimeout(10);
@@ -90,15 +92,15 @@ void connect_to_wifi() {
 }
 
 void wifi_reconnect() {
+    digitalWrite(STATUS_LED, HIGH);
     static unsigned long lastAttempt = 0;
     unsigned long now = millis();
-    if (now - lastAttempt < 5000)
+    if (now - lastAttempt < 10000)
         return;
     lastAttempt = now;
 
     Serial.println("WiFi lost, reconnecting..");
-    WiFi.disconnect();
-    WiFi.reconnect();
+    WiFi.begin();
 }
 
 void mqtt_reconnect() {
@@ -113,9 +115,9 @@ void mqtt_reconnect() {
     if (client.connect(mqtt_client_id, mqtt_username, mqtt_pass)) {
         Serial.println("MQTT Connected!");
         for (int i = 0; i < N_DEVICES; i++) {
-            client.subscribe(MQTT_TOPICS[i]);
+            client.subscribe(MQTT_TOPICS[i], 1);
         }
-        client.subscribe(FIRMWARE_UPDATE_TOPIC);
+        client.subscribe(FIRMWARE_UPDATE_TOPIC, 1);
     } else {
         Serial.printf("MQTT Failed, rc=%d. Try again in 5 seconds.\n",
                       client.state());
@@ -123,7 +125,7 @@ void mqtt_reconnect() {
 }
 
 // -------------- MQTT --------------
-void update_ota(const char* url) {
+void update_ota(const char *url) {
     Serial.printf("Starting OTA update from URL: %s\n", url);
 
     client.disconnect();

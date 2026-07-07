@@ -11,7 +11,7 @@ extern char mqtt_username[64];
 extern char mqtt_pass[32];
 extern char mqtt_server[128];
 extern char mqtt_port[6];
-extern char mqtt_client_id[64];
+// extern char mqtt_client_id[64];
 extern bool update_config;
 
 extern WiFiClientSecure espClient;
