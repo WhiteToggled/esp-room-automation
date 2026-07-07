@@ -13,7 +13,7 @@ export interface Cabin {
   fan: CabinDevice;
 }
 
-export const INITIAL_CABINS: Cabin[] = Array.from({ length: 8 }, (_, i) => ({
+export const INITIAL_CABINS: Cabin[] = Array.from({ length: 6 }, (_, i) => ({
   id: `cabin-${i + 1}`,
   name: `Cabin ${i + 1}`,
   number: i + 1,

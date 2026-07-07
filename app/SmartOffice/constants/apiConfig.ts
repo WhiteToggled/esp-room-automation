@@ -1,2 +1,2 @@
-export const BASE_URL = 'http://192.168.1.10:8000';
+export const BASE_URL = 'https://esp-room-automation.onrender.com';
 export const TOKEN_KEY = 'nestboard_token';

@@ -8,6 +8,7 @@ import {
   Modal,
   ScrollView,
   StatusBar,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -132,6 +133,13 @@ const AdminUsersScreen: React.FC<AdminUsersScreenProps> = ({ refreshKey }) => {
 
   useEffect(() => { fetchUsers(); }, [fetchUsers, refreshKey]);
 
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchUsers();
+    setRefreshing(false);
+  }, [fetchUsers]);
+
   const handleAssign = async (cabinId: string | null) => {
     if (!selectedUser) return;
     const rooms = cabinId ? [cabinIdToRoom(cabinId)] : [];
@@ -225,6 +233,9 @@ const AdminUsersScreen: React.FC<AdminUsersScreenProps> = ({ refreshKey }) => {
             keyExtractor={(u) => u.username}
             contentContainerStyle={styles.list}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />
+            }
           />
         )}
       </SafeAreaView>
@@ -244,7 +255,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   glowTop: {
     position: 'absolute', top: -80, right: -80,
     width: 260, height: 260, borderRadius: 130,
-    backgroundColor: 'rgba(255,122,0,0.07)',
+    backgroundColor: 'rgba(47,128,237,0.07)',
   },
   header: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -269,8 +280,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   avatar: {
     width: 44, height: 44, borderRadius: 22,
-    backgroundColor: 'rgba(255,122,0,0.15)',
-    borderWidth: 1, borderColor: 'rgba(255,122,0,0.3)',
+    backgroundColor: 'rgba(47,128,237,0.15)',
+    borderWidth: 1, borderColor: 'rgba(47,128,237,0.3)',
     alignItems: 'center', justifyContent: 'center',
     marginRight: SPACING.md,
   },
@@ -280,7 +291,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   userEmail: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
   cabinChip: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,122,0,0.12)',
+    backgroundColor: 'rgba(47,128,237,0.12)',
     borderRadius: RADIUS.full, paddingHorizontal: 8, paddingVertical: 3,
     alignSelf: 'flex-start', marginTop: 5,
   },
@@ -294,9 +305,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   unassignedText: { color: colors.textMuted, fontSize: 11, marginLeft: 4 },
   assignBtn: {
     flexDirection: 'row', alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,122,0,0.3)',
+    borderWidth: 1, borderColor: 'rgba(47,128,237,0.3)',
     borderRadius: RADIUS.sm, paddingHorizontal: SPACING.sm, paddingVertical: 7,
-    backgroundColor: 'rgba(255,122,0,0.08)',
+    backgroundColor: 'rgba(47,128,237,0.08)',
     marginLeft: SPACING.sm,
   },
   assignBtnText: { color: colors.accent, fontSize: 12, fontWeight: '600', marginLeft: 4 },
@@ -340,7 +351,7 @@ const createModalStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: SPACING.xl, paddingVertical: SPACING.md,
     borderRadius: RADIUS.md, marginHorizontal: SPACING.sm, marginVertical: 2,
   },
-  cabinRowActive: { backgroundColor: 'rgba(255,122,0,0.08)' },
+  cabinRowActive: { backgroundColor: 'rgba(47,128,237,0.08)' },
   cabinIcon: {
     width: 36, height: 36, borderRadius: 10,
     alignItems: 'center', justifyContent: 'center',
@@ -349,8 +360,8 @@ const createModalStyles = (colors: ThemeColors) => StyleSheet.create({
     borderWidth: 1, borderColor: colors.glassBorder,
   },
   cabinIconActive: {
-    backgroundColor: 'rgba(255,122,0,0.12)',
-    borderColor: 'rgba(255,122,0,0.3)',
+    backgroundColor: 'rgba(47,128,237,0.12)',
+    borderColor: 'rgba(47,128,237,0.3)',
   },
   cabinInfo: { flex: 1 },
   cabinName: { color: colors.textSecondary, fontSize: 15, fontWeight: '500' },

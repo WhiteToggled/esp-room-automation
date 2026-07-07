@@ -75,9 +75,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: 8,
     marginRight: SPACING.xs, // replaces gap
     borderRadius: RADIUS.sm,
-    backgroundColor: 'rgba(255,122,0,0.1)',
+    backgroundColor: 'rgba(47,128,237,0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(255,122,0,0.2)',
+    borderColor: 'rgba(47,128,237,0.2)',
   },
 
   btnDanger: {

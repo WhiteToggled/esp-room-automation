@@ -1,7 +1,9 @@
+import 'react-native-gesture-handler';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
 import { pingHealth } from '../api/devices';
@@ -52,10 +54,12 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <AuthProvider>
-      <ThemeContextProvider>
-        <ThemedNavigation />
-      </ThemeContextProvider>
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+        <ThemeContextProvider>
+          <ThemedNavigation />
+        </ThemeContextProvider>
+      </AuthProvider>
+    </GestureHandlerRootView>
   );
 }

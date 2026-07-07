@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  Modal, ScrollView, StatusBar, Alert,
+  Modal, ScrollView, StatusBar, Alert, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +10,7 @@ import { SPACING, RADIUS, ThemeColors } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import ToggleSwitch from '../components/ToggleSwitch';
 import FadeInView from '../components/FadeInView';
+import WheelTimePicker from '../components/WheelTimePicker';
 import * as api from '../api/devices';
 import { Schedule, ScheduleCreate } from '../api/devices';
 import { useAuth } from '../context/AuthContext';
@@ -47,34 +48,6 @@ const formatTime = (h: number, m: number) => {
   return `${String(hour).padStart(2, '0')}:${String(m).padStart(2, '0')} ${period}`;
 };
 
-// Press-and-hold support for the time steppers: one immediate step on tap, then
-// repeats continuously while held until release.
-const HOLD_DELAY = 350;
-const HOLD_INTERVAL = 90;
-
-const useHoldRepeat = (onStep: () => void) => {
-  const stepRef = useRef(onStep);
-  stepRef.current = onStep;
-  const timeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const interval = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const stop = useCallback(() => {
-    if (timeout.current) { clearTimeout(timeout.current); timeout.current = null; }
-    if (interval.current) { clearInterval(interval.current); interval.current = null; }
-  }, []);
-
-  const start = useCallback(() => {
-    stepRef.current();
-    timeout.current = setTimeout(() => {
-      interval.current = setInterval(() => stepRef.current(), HOLD_INTERVAL);
-    }, HOLD_DELAY);
-  }, []);
-
-  useEffect(() => () => stop(), [stop]);
-
-  return { onPressIn: start, onPressOut: stop };
-};
-
 // ─── Schedule Form Modal ──────────────────────────────────────────────────────
 
 interface ScheduleFormProps {
@@ -103,12 +76,6 @@ const ScheduleFormModal: React.FC<ScheduleFormProps> = ({
     }
   }, [visible]);
 
-  const adjHour = (d: number) => setForm((f) => ({ ...f, hour: (f.hour + d + 24) % 24 }));
-  const adjMin  = (d: number) => setForm((f) => ({ ...f, minute: (f.minute + d + 60) % 60 }));
-  const hourUp = useHoldRepeat(() => adjHour(1));
-  const hourDown = useHoldRepeat(() => adjHour(-1));
-  const minUp = useHoldRepeat(() => adjMin(1));
-  const minDown = useHoldRepeat(() => adjMin(-1));
   const toggleDay = (day: string) =>
     setForm((f) => ({
       ...f,
@@ -210,31 +177,11 @@ const ScheduleFormModal: React.FC<ScheduleFormProps> = ({
 
             {/* ── Time ── */}
             <Text style={[fm.label, { marginTop: SPACING.xl }]}>TIME</Text>
-            <View style={fm.timeCard}>
-              <View style={fm.timeUnit}>
-                <TouchableOpacity style={fm.timeArrow} {...hourUp} activeOpacity={0.6}>
-                  <Ionicons name="chevron-up" size={22} color={colors.accent} />
-                </TouchableOpacity>
-                <Text style={fm.timeDigit}>{String(form.hour).padStart(2, '0')}</Text>
-                <TouchableOpacity style={fm.timeArrow} {...hourDown} activeOpacity={0.6}>
-                  <Ionicons name="chevron-down" size={22} color={colors.accent} />
-                </TouchableOpacity>
-              </View>
-              <Text style={fm.timeSep}>:</Text>
-              <View style={fm.timeUnit}>
-                <TouchableOpacity style={fm.timeArrow} {...minUp} activeOpacity={0.6}>
-                  <Ionicons name="chevron-up" size={22} color={colors.accent} />
-                </TouchableOpacity>
-                <Text style={fm.timeDigit}>{String(form.minute).padStart(2, '0')}</Text>
-                <TouchableOpacity style={fm.timeArrow} {...minDown} activeOpacity={0.6}>
-                  <Ionicons name="chevron-down" size={22} color={colors.accent} />
-                </TouchableOpacity>
-              </View>
-              <View style={fm.periodBox}>
-                <Text style={fm.periodMain}>{form.hour >= 12 ? 'PM' : 'AM'}</Text>
-                <Text style={fm.period24}>{`${String(form.hour).padStart(2, '0')}:${String(form.minute).padStart(2, '0')}`}</Text>
-              </View>
-            </View>
+            <WheelTimePicker
+              hour={form.hour}
+              minute={form.minute}
+              onChange={(hour, minute) => setForm((f) => ({ ...f, hour, minute }))}
+            />
 
             {/* ── Days ── */}
             <Text style={[fm.label, { marginTop: SPACING.xl }]}>REPEAT ON</Text>
@@ -373,7 +320,7 @@ const createFmStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', marginRight: SPACING.md,
     borderWidth: 1,
   },
-  iconLight: { backgroundColor: 'rgba(255,122,0,0.12)', borderColor: 'rgba(255,122,0,0.25)' },
+  iconLight: { backgroundColor: 'rgba(47,128,237,0.12)', borderColor: 'rgba(47,128,237,0.25)' },
   iconFan:   { backgroundColor: 'rgba(96,165,250,0.12)', borderColor: 'rgba(96,165,250,0.25)' },
   deviceName: { color: colors.text, fontSize: 14, fontWeight: '600' },
   deviceSub:  { color: colors.textMuted, fontSize: 11, marginTop: 2 },
@@ -389,7 +336,7 @@ const createFmStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
     marginHorizontal: SPACING.xs, borderRadius: RADIUS.sm,
   },
-  deviceOptionActive: { backgroundColor: 'rgba(255,122,0,0.08)' },
+  deviceOptionActive: { backgroundColor: 'rgba(47,128,237,0.08)' },
   deviceOptionIcon: {
     width: 28, height: 28, borderRadius: 8,
     alignItems: 'center', justifyContent: 'center',
@@ -398,32 +345,19 @@ const createFmStyles = (colors: ThemeColors) => StyleSheet.create({
   deviceOptionName:       { color: colors.textSecondary, fontSize: 13, fontWeight: '500' },
   deviceOptionNameActive: { color: colors.text, fontWeight: '600' },
   deviceOptionId:         { color: colors.textMuted, fontSize: 10, marginTop: 1 },
-  // Time picker
-  timeCard: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder,
-    borderRadius: RADIUS.md, paddingVertical: SPACING.md, paddingHorizontal: SPACING.xl,
-  },
-  timeUnit:  { alignItems: 'center', minWidth: 72 },
-  timeArrow: { width: 44, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: RADIUS.sm },
-  timeDigit: { color: colors.text, fontSize: 40, fontWeight: '700', letterSpacing: -1 },
-  timeSep:   { color: colors.accent, fontSize: 36, fontWeight: '700', marginHorizontal: SPACING.sm, marginBottom: 4 },
-  periodBox:  { alignItems: 'center', marginLeft: SPACING.lg },
-  periodMain: { color: colors.accent, fontSize: 18, fontWeight: '700' },
-  period24:   { color: colors.textMuted, fontSize: 11, marginTop: 4 },
   // Days
   daysRow:         { flexDirection: 'row', justifyContent: 'space-between' },
   dayChip:         { flex: 1, marginHorizontal: 3, aspectRatio: 1, maxWidth: 42, borderRadius: RADIUS.full, backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder, alignItems: 'center', justifyContent: 'center' },
-  dayChipActive:   { backgroundColor: 'rgba(255,122,0,0.15)', borderColor: 'rgba(255,122,0,0.45)' },
+  dayChipActive:   { backgroundColor: 'rgba(47,128,237,0.15)', borderColor: 'rgba(47,128,237,0.45)' },
   dayChipText:     { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
   dayChipTextActive: { color: colors.accent },
   // Action
   actionRow:    { flexDirection: 'row', gap: SPACING.sm },
   actionBtn:    { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder, borderRadius: RADIUS.md, padding: SPACING.md, gap: SPACING.sm },
-  actionBtnOn:  { backgroundColor: 'rgba(255,122,0,0.10)', borderColor: 'rgba(255,122,0,0.35)' },
+  actionBtnOn:  { backgroundColor: 'rgba(47,128,237,0.10)', borderColor: 'rgba(47,128,237,0.35)' },
   actionBtnOff: { backgroundColor: 'rgba(255,77,77,0.08)',  borderColor: 'rgba(255,77,77,0.30)'  },
   actionIcon:    { width: 30, height: 30, borderRadius: 9, backgroundColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center' },
-  actionIconOn:  { backgroundColor: 'rgba(255,122,0,0.15)' },
+  actionIconOn:  { backgroundColor: 'rgba(47,128,237,0.15)' },
   actionIconOff: { backgroundColor: 'rgba(255,77,77,0.12)' },
   actionText:    { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
   actionTextOn:  { color: colors.accent },
@@ -531,19 +465,19 @@ const createScStyles = (colors: ThemeColors) => StyleSheet.create({
   time: { color: colors.text, fontSize: 26, fontWeight: '700', letterSpacing: -0.5 },
   timeDimmed: { color: colors.textSecondary },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: SPACING.sm, paddingVertical: 4, borderRadius: RADIUS.full, borderWidth: 1, alignSelf: 'center' },
-  badgeOn:       { backgroundColor: 'rgba(255,122,0,0.12)', borderColor: 'rgba(255,122,0,0.3)' },
+  badgeOn:       { backgroundColor: 'rgba(47,128,237,0.12)', borderColor: 'rgba(47,128,237,0.3)' },
   badgeOff:      { backgroundColor: 'rgba(255,77,77,0.10)', borderColor: 'rgba(255,77,77,0.25)' },
   badgeText:     { fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
   badgeTextOn:   { color: colors.accent },
   badgeTextOff:  { color: '#FF4D4D' },
   deviceRow: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.md, gap: SPACING.xs },
   deviceDot: { width: 22, height: 22, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
-  dotLight: { backgroundColor: 'rgba(255,122,0,0.12)' },
+  dotLight: { backgroundColor: 'rgba(47,128,237,0.12)' },
   dotFan:   { backgroundColor: 'rgba(96,165,250,0.12)' },
   deviceText: { color: colors.textSecondary, fontSize: 13, fontWeight: '500' },
   daysRow:      { flexDirection: 'row', gap: 5, marginBottom: SPACING.md },
   dayDot:       { width: 26, height: 26, borderRadius: RADIUS.full, backgroundColor: 'rgba(255,255,255,0.04)', alignItems: 'center', justifyContent: 'center' },
-  dayDotActive: { backgroundColor: 'rgba(255,122,0,0.15)' },
+  dayDotActive: { backgroundColor: 'rgba(47,128,237,0.15)' },
   dayText:      { color: colors.textMuted, fontSize: 9, fontWeight: '800' },
   dayTextActive:{ color: colors.accent },
   divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginBottom: SPACING.md },
@@ -590,6 +524,13 @@ const SchedulesScreen: React.FC = () => {
   }, []);
 
   useEffect(() => { fetchSchedules(); }, [fetchSchedules]);
+
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchSchedules();
+    setRefreshing(false);
+  }, [fetchSchedules]);
 
   const handleSave = async (form: ScheduleCreate, editId: number | null) => {
     try {
@@ -707,6 +648,9 @@ const SchedulesScreen: React.FC = () => {
             )}
             contentContainerStyle={s.list}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />
+            }
           />
         )}
       </SafeAreaView>
@@ -726,8 +670,8 @@ const SchedulesScreen: React.FC = () => {
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   safe: { flex: 1 },
-  glowTR: { position: 'absolute', top: -80, right: -80, width: 280, height: 280, borderRadius: 140, backgroundColor: 'rgba(255,122,0,0.07)' },
-  glowBL: { position: 'absolute', bottom: 100, left: -60, width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(255,122,0,0.04)' },
+  glowTR: { position: 'absolute', top: -80, right: -80, width: 280, height: 280, borderRadius: 140, backgroundColor: 'rgba(47,128,237,0.07)' },
+  glowBL: { position: 'absolute', bottom: 100, left: -60, width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(47,128,237,0.04)' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: SPACING.xl, paddingTop: SPACING.xl, paddingBottom: SPACING.lg },
   title:    { color: colors.text, fontSize: 22, fontWeight: '700', letterSpacing: -0.5 },
   subtitle: { color: colors.textMuted, fontSize: 13, marginTop: 2 },
@@ -746,7 +690,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   emptyIconWrap: { width: 80, height: 80, borderRadius: 40, backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder, alignItems: 'center', justifyContent: 'center', marginBottom: SPACING.lg },
   emptyTitle:    { color: colors.text, fontSize: 18, fontWeight: '600', marginBottom: SPACING.sm },
   emptySubtitle: { color: colors.textMuted, fontSize: 14, textAlign: 'center', lineHeight: 22, marginBottom: SPACING.xl },
-  emptyBtn:      { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, borderWidth: 1, borderColor: 'rgba(255,122,0,0.35)', backgroundColor: 'rgba(255,122,0,0.08)', borderRadius: RADIUS.full, paddingHorizontal: SPACING.xl, paddingVertical: SPACING.md },
+  emptyBtn:      { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs, borderWidth: 1, borderColor: 'rgba(47,128,237,0.35)', backgroundColor: 'rgba(47,128,237,0.08)', borderRadius: RADIUS.full, paddingHorizontal: SPACING.xl, paddingVertical: SPACING.md },
   emptyBtnText:  { color: colors.accent, fontSize: 14, fontWeight: '600' },
 });
 

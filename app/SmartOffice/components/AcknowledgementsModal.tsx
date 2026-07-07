@@ -117,12 +117,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   glowTopLeft: {
     position: 'absolute', top: -60, left: -60,
     width: 220, height: 220, borderRadius: 110,
-    backgroundColor: 'rgba(255,122,0,0.08)',
+    backgroundColor: 'rgba(47,128,237,0.08)',
   },
   glowBottomRight: {
     position: 'absolute', bottom: 80, right: -80,
     width: 260, height: 260, borderRadius: 130,
-    backgroundColor: 'rgba(255,122,0,0.05)',
+    backgroundColor: 'rgba(47,128,237,0.05)',
   },
   header: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -139,8 +139,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   hero: { alignItems: 'center', marginTop: SPACING.md, marginBottom: SPACING.xxl },
   logoCircle: {
     width: 72, height: 72, borderRadius: 36,
-    backgroundColor: 'rgba(255,122,0,0.12)',
-    borderWidth: 1, borderColor: 'rgba(255,122,0,0.3)',
+    backgroundColor: 'rgba(47,128,237,0.12)',
+    borderWidth: 1, borderColor: 'rgba(47,128,237,0.3)',
     alignItems: 'center', justifyContent: 'center',
     marginBottom: SPACING.md,
   },
@@ -162,8 +162,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   contributorRowBorder: { borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
   avatar: {
     width: 42, height: 42, borderRadius: 21,
-    backgroundColor: 'rgba(255,122,0,0.15)',
-    borderWidth: 1, borderColor: 'rgba(255,122,0,0.3)',
+    backgroundColor: 'rgba(47,128,237,0.15)',
+    borderWidth: 1, borderColor: 'rgba(47,128,237,0.3)',
     alignItems: 'center', justifyContent: 'center',
     marginRight: SPACING.md,
   },

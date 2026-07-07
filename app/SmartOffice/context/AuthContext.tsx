@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import apiClient from '../api/client';
+import apiClient, { setUnauthorizedHandler } from '../api/client';
 import { TOKEN_KEY } from '../constants/apiConfig';
 
 export interface AppUser {
@@ -77,6 +77,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       setLoading(false);
     })();
+  }, []);
+
+  // Any authenticated request that comes back 401 means the token has expired —
+  // clear the session and drop the user so the app returns to the login screen.
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      AsyncStorage.multiRemove([SESSION_KEY, TOKEN_STORAGE_KEY]).catch(() => {});
+      setUser(null);
+    });
+    return () => setUnauthorizedHandler(null);
   }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {

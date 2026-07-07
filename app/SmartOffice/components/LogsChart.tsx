@@ -378,7 +378,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   fillBar: {
     position: 'absolute',
     bottom: 0,
-    backgroundColor: 'rgba(255,122,0,0.12)',
+    backgroundColor: 'rgba(47,128,237,0.12)',
     borderTopLeftRadius: 2,
     borderTopRightRadius: 2,
   },
@@ -417,8 +417,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   legendDotPeak: { backgroundColor: 'transparent', borderWidth: 2 },
   legendSwatchFill: {
     width: 9, height: 9, borderRadius: 2,
-    backgroundColor: 'rgba(255,122,0,0.18)',
-    borderWidth: 1, borderColor: 'rgba(255,122,0,0.3)',
+    backgroundColor: 'rgba(47,128,237,0.18)',
+    borderWidth: 1, borderColor: 'rgba(47,128,237,0.3)',
   },
   legendText: { color: colors.textMuted, fontSize: 11, fontWeight: '500' },
 });

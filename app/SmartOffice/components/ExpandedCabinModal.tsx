@@ -149,7 +149,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginRight: SPACING.md, alignItems: 'center', justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.05)',
   },
-  iconWrapOn: { backgroundColor: 'rgba(255,122,0,0.15)' },
+  iconWrapOn: { backgroundColor: 'rgba(47,128,237,0.15)' },
   deviceLabel: { color: colors.textMuted, fontSize: 15, fontWeight: '600' },
   deviceLabelOn: { color: colors.text },
 });

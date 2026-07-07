@@ -3,12 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   StatusBar,
   Dimensions,
   PanResponder,
 } from 'react-native';
+import { ScrollView } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   useSharedValue,
@@ -23,7 +24,8 @@ import * as devicesApi from '../api/devices';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import Header from '../components/Header';
-import CabinCard from '../components/CabinCard';
+import Loader from '../components/Loader';
+import DraggableCabinGrid from '../components/DraggableCabinGrid';
 import BottomNav, { TabName } from '../components/BottomNav';
 import MasterControl from '../components/MasterControl';
 import ExpandedCabinModal from '../components/ExpandedCabinModal';
@@ -34,7 +36,9 @@ import SettingsScreen from './SettingsScreen';
 import LogsScreen from './LogsScreen';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const NUM_COLUMNS = 2;
+
+// Persisted admin-defined ordering of the cabin grid (drag-to-rearrange).
+const CABIN_ORDER_KEY = 'nestboard_cabin_order';
 
 const TIMING = { duration: 280, easing: Easing.out(Easing.cubic) };
 
@@ -49,8 +53,14 @@ const HomeScreen: React.FC = () => {
   const { colors, theme } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [cabins, setCabins] = useState<Cabin[]>(INITIAL_CABINS);
+  // True until the first /states fetch settles — until then we show the loader
+  // instead of the seeded (dummy) on/off states from INITIAL_CABINS.
+  const [initialLoading, setInitialLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabName>('home');
   const [expandedCabinId, setExpandedCabinId] = useState<string | null>(null);
+  // While a cabin card is being dragged, freeze the page scroll so the gesture
+  // doesn't fight the vertical ScrollView.
+  const [isDragging, setIsDragging] = useState(false);
 
   const isAdmin = user?.role === 'admin';
   const [usersRefreshKey, setUsersRefreshKey] = useState(0);
@@ -140,6 +150,51 @@ const HomeScreen: React.FC = () => {
   const cabinsRef = useRef(cabins);
   useEffect(() => { cabinsRef.current = cabins; }, [cabins]);
 
+  // Restore the admin's saved drag ordering once on mount. Any cabin missing
+  // from the saved list (e.g. added later) keeps its default position at the end.
+  useEffect(() => {
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem(CABIN_ORDER_KEY);
+        if (!saved) return;
+        const order: string[] = JSON.parse(saved);
+        if (!Array.isArray(order)) return;
+        setCabins((prev) => {
+          const rank = new Map(order.map((id, i) => [id, i]));
+          const next = [...prev].sort(
+            (a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity)
+          );
+          return next;
+        });
+      } catch (_) {}
+    })();
+  }, []);
+
+  const handleReorder = useCallback((orderedIds: string[]) => {
+    setCabins((prev) => {
+      const byId = new Map(prev.map((c) => [c.id, c]));
+      const next = orderedIds.map((id) => byId.get(id)).filter(Boolean) as Cabin[];
+      // Preserve any cabin not present in the reordered list (defensive).
+      for (const c of prev) if (!orderedIds.includes(c.id)) next.push(c);
+      return next;
+    });
+    AsyncStorage.setItem(CABIN_ORDER_KEY, JSON.stringify(orderedIds)).catch(() => {});
+  }, []);
+
+  // Topics we've just optimistically changed, mapped to the value we expect the
+  // server to settle on (1/0). While a topic is "pending", reconcileStates ignores
+  // any incoming /states value that DOESN'T match the expected one — that stops an
+  // in-flight (stale) poll from resurrecting the old state and causing the flicker.
+  // The lock releases the moment a poll reports the expected value.
+  const pendingRef = useRef<Record<string, number>>({});
+
+  const markPending = useCallback((topic: string | undefined, on: boolean) => {
+    if (!topic) return;
+    pendingRef.current[topic] = on ? 1 : 0;
+    // Safety net: never hold the lock forever if the device/broker never confirms.
+    setTimeout(() => { delete pendingRef.current[topic]; }, 8000);
+  }, []);
+
   // Maps every cabin through `updater`, but reuses the previous cabin object
   // (and the previous array, if nothing changed at all) wherever the updater
   // reports no change — so polling that finds nothing new triggers zero re-renders.
@@ -156,54 +211,85 @@ const HomeScreen: React.FC = () => {
   }, []);
 
   const toggleLight = useCallback((cabinId: string) => {
+    const cabin = cabinsRef.current.find((c) => c.id === cabinId);
+    const topic = cabin?.light.topic;
+    const nextOn = cabin ? !cabin.light.isOn : false;
     applyCabinUpdate((c) => (c.id === cabinId ? { ...c, light: { ...c.light, isOn: !c.light.isOn } } : c));
-    const topic = cabinsRef.current.find((c) => c.id === cabinId)?.light.topic;
     if (topic) {
+      markPending(topic, nextOn);
       devicesApi.toggle(topic).catch(async () => {
+        delete pendingRef.current[topic]; // request failed — let reconcile correct us
         try {
           const states = await devicesApi.getStates();
           reconcileStates(states);
         } catch (_) {}
       });
     }
-  }, [applyCabinUpdate]);
+  }, [applyCabinUpdate, markPending]);
 
   const toggleFan = useCallback((cabinId: string) => {
+    const cabin = cabinsRef.current.find((c) => c.id === cabinId);
+    const topic = cabin?.fan.topic;
+    const nextOn = cabin ? !cabin.fan.isOn : false;
     applyCabinUpdate((c) => (c.id === cabinId ? { ...c, fan: { ...c.fan, isOn: !c.fan.isOn } } : c));
-    const topic = cabinsRef.current.find((c) => c.id === cabinId)?.fan.topic;
     if (topic) {
+      markPending(topic, nextOn);
       devicesApi.toggle(topic).catch(async () => {
+        delete pendingRef.current[topic];
         try {
           const states = await devicesApi.getStates();
           reconcileStates(states);
         } catch (_) {}
       });
     }
-  }, [applyCabinUpdate]);
+  }, [applyCabinUpdate, markPending]);
 
   const allLightsOn = useCallback(() => {
+    cabinsRef.current.forEach((c) => markPending(c.light.topic, true));
     applyCabinUpdate((c) => (c.light.isOn ? c : { ...c, light: { ...c.light, isOn: true } }));
     devicesApi.getStates().then(reconcileStates).catch(() => {});
-  }, [applyCabinUpdate]);
+  }, [applyCabinUpdate, markPending]);
 
   const allFansOn = useCallback(() => {
+    cabinsRef.current.forEach((c) => markPending(c.fan.topic, true));
     applyCabinUpdate((c) => (c.fan.isOn ? c : { ...c, fan: { ...c.fan, isOn: true } }));
     devicesApi.getStates().then(reconcileStates).catch(() => {});
-  }, [applyCabinUpdate]);
+  }, [applyCabinUpdate, markPending]);
 
   const allOff = useCallback(() => {
+    cabinsRef.current.forEach((c) => {
+      markPending(c.light.topic, false);
+      markPending(c.fan.topic, false);
+    });
     applyCabinUpdate((c) =>
       !c.light.isOn && !c.fan.isOn
         ? c
         : { ...c, light: { ...c.light, isOn: false }, fan: { ...c.fan, isOn: false } }
     );
     devicesApi.getStates().then(reconcileStates).catch(() => {});
-  }, [applyCabinUpdate]);
+  }, [applyCabinUpdate, markPending]);
 
   const reconcileStates = useCallback((states: Record<string, number>) => {
+    const pending = pendingRef.current;
+    // For a device with a pending change, only accept the incoming value once it
+    // matches what we expect (then release the lock); otherwise keep the optimistic
+    // value so a stale/echoed poll can't flip it back.
+    const resolve = (topic: string | undefined, currentOn: boolean): boolean => {
+      if (!topic) return currentOn;
+      const incoming = Boolean(states[topic]);
+      const expected = pending[topic];
+      if (expected !== undefined) {
+        if (Number(incoming) === expected) {
+          delete pending[topic];
+          return incoming;
+        }
+        return currentOn;
+      }
+      return incoming;
+    };
     applyCabinUpdate((c) => {
-      const lightOn = c.light.topic ? Boolean(states[c.light.topic]) : c.light.isOn;
-      const fanOn = c.fan.topic ? Boolean(states[c.fan.topic]) : c.fan.isOn;
+      const lightOn = resolve(c.light.topic, c.light.isOn);
+      const fanOn = resolve(c.fan.topic, c.fan.isOn);
       if (lightOn === c.light.isOn && fanOn === c.fan.isOn) return c;
       return { ...c, light: { ...c.light, isOn: lightOn }, fan: { ...c.fan, isOn: fanOn } };
     });
@@ -216,7 +302,10 @@ const HomeScreen: React.FC = () => {
       try {
         const states = await devicesApi.getStates();
         if (mounted) reconcileStates(states as Record<string, number>);
-      } catch (_) {}
+      } catch (_) {
+      } finally {
+        if (mounted) setInitialLoading(false);
+      }
     };
 
     fetchAndReconcile();
@@ -232,16 +321,6 @@ const HomeScreen: React.FC = () => {
   const totalDevices = visibleCabins.length * 2;
 
   const expandedCabin = cabins.find((c) => c.id === expandedCabinId) ?? null;
-
-  const renderCabin = ({ item, index }: { item: Cabin; index: number }) => (
-    <CabinCard
-      cabin={item}
-      index={index}
-      onToggleLight={toggleLight}
-      onToggleFan={toggleFan}
-      onExpand={setExpandedCabinId}
-    />
-  );
 
   const hasNoCabin = !isAdmin && !user?.assignedCabinId;
 
@@ -261,14 +340,16 @@ const HomeScreen: React.FC = () => {
         >
           <SafeAreaView style={styles.safeArea} edges={['top']}>
             <Header
-              activeDevices={activeDevices}
+              activeDevices={initialLoading ? 0 : activeDevices}
               totalDevices={totalDevices}
               userName={user?.name}
               cabinCount={visibleCabins.length}
               onLogout={logout}
             />
 
-            {hasNoCabin ? (
+            {initialLoading ? (
+              <Loader />
+            ) : hasNoCabin ? (
               <View style={styles.noCabin}>
                 <View style={styles.noCabinIcon}>
                   <Ionicons name="time-outline" size={36} color={colors.textMuted} />
@@ -284,24 +365,27 @@ const HomeScreen: React.FC = () => {
                 </View>
               </View>
             ) : (
-              <FlatList
-                data={visibleCabins}
-                renderItem={renderCabin}
-                keyExtractor={(item) => item.id}
-                numColumns={NUM_COLUMNS}
+              <ScrollView
                 contentContainerStyle={styles.grid}
-                columnWrapperStyle={visibleCabins.length > 1 ? styles.row : undefined}
                 showsVerticalScrollIndicator={false}
-                ListHeaderComponent={
-                  isAdmin ? (
-                    <MasterControl
-                      onAllLightsOn={allLightsOn}
-                      onAllFansOn={allFansOn}
-                      onAllOff={allOff}
-                    />
-                  ) : null
-                }
-              />
+                scrollEnabled={!isDragging}
+              >
+                {isAdmin && (
+                  <MasterControl
+                    onAllLightsOn={allLightsOn}
+                    onAllFansOn={allFansOn}
+                    onAllOff={allOff}
+                  />
+                )}
+                <DraggableCabinGrid
+                  cabins={visibleCabins}
+                  onReorder={handleReorder}
+                  onDragStateChange={setIsDragging}
+                  onToggleLight={toggleLight}
+                  onToggleFan={toggleFan}
+                  onExpand={setExpandedCabinId}
+                />
+              </ScrollView>
             )}
           </SafeAreaView>
         </Animated.View>
@@ -383,18 +467,17 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   glowTopLeft: {
     position: 'absolute', top: -60, left: -60,
     width: 220, height: 220, borderRadius: 110,
-    backgroundColor: 'rgba(255,122,0,0.08)',
+    backgroundColor: 'rgba(47,128,237,0.08)',
   },
   glowBottomRight: {
     position: 'absolute', bottom: 80, right: -80,
     width: 260, height: 260, borderRadius: 130,
-    backgroundColor: 'rgba(255,122,0,0.05)',
+    backgroundColor: 'rgba(47,128,237,0.05)',
   },
   grid: {
     paddingHorizontal: SPACING.xl - SPACING.sm / 2,
     paddingBottom: SPACING.xl,
   },
-  row: { justifyContent: 'space-between' },
   navWrapper: { backgroundColor: 'transparent' },
   noCabin: {
     flex: 1, alignItems: 'center', justifyContent: 'center',
@@ -417,8 +500,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   noCabinHint: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,122,0,0.08)',
-    borderWidth: 1, borderColor: 'rgba(255,122,0,0.2)',
+    backgroundColor: 'rgba(47,128,237,0.08)',
+    borderWidth: 1, borderColor: 'rgba(47,128,237,0.2)',
     borderRadius: RADIUS.full, paddingHorizontal: SPACING.md, paddingVertical: 8,
   },
   noCabinHintText: { color: colors.accent, fontSize: 13, fontWeight: '500', marginLeft: SPACING.xs },

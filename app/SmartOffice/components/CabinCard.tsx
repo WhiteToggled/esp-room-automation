@@ -251,7 +251,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create<{
     justifyContent: 'center',
   },
   iconWrapOn: {
-    backgroundColor: 'rgba(255,122,0,0.15)',
+    backgroundColor: 'rgba(47,128,237,0.15)',
   },
   deviceLabel: {
     color: colors.textMuted,
