@@ -8,6 +8,7 @@ from .config import (
     MQTT_PORT,
     MQTT_SYNC_TOPIC,
     MQTT_TLS,
+    MQTT_TRANSPORT,
     MQTT_USER,
 )
 from .database import SessionLocal, save_device_state
@@ -71,7 +72,7 @@ def _on_message(client, userdata, msg):
         print(f"MQTT error on {msg.topic}: {e}")
 
 
-mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, transport=MQTT_TRANSPORT)
 mqtt_client.on_connect = _on_connect
 mqtt_client.on_message = _on_message
 

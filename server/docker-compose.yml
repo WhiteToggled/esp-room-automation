@@ -19,7 +19,6 @@ services:
     image: eclipse-mosquitto:2
     restart: unless-stopped
     ports:
-      - "1883:1883"   # raw MQTT — for ESP devices on the local network
       - "9001:9001"   # MQTT over WebSocket — expose via Cloudflare tunnel
     environment:
       MQTT_USER: ${MQTT_USER}
@@ -31,6 +30,16 @@ services:
       - mosquitto-data:/mosquitto/data
       - mosquitto-log:/mosquitto/log
 
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - server
+      - mqtt-broker
+
   server:
     build: .
     restart: unless-stopped
@@ -41,7 +50,8 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-automation}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-automation}
       MQTT_BROKER: mqtt-broker
-      MQTT_PORT: "1883"
+      MQTT_PORT: "9001"
+      MQTT_TRANSPORT: websockets
     depends_on:
       db:
         condition: service_healthy
