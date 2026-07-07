@@ -92,12 +92,9 @@ def toggle_all(
     any_off = any(device_states.get(d.id, 0) == 0 for d in devices)
     target_state = 1 if any_off else 0
     print(f"[{current_user['username']}] toggle-all → {'ON' if target_state else 'OFF'} ({len(devices)} devices)")
-    for device in devices:
-        device_states[device.id] = target_state
-        mqtt_client.publish(device.id, str(target_state), qos=1, retain=True)
-        save_device_state(db, device.id, target_state)
+    count = _set_devices(devices, target_state, db)
 
-    return {"message": f"All devices set to {target_state}", "count": len(devices), "new_state": target_state}
+    return {"message": f"All devices set to {target_state}", "count": count, "new_state": target_state}
 
 
 @router.post("/lights/on")

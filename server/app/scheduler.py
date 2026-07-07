@@ -4,9 +4,9 @@ from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from .config import LOG_INTERVAL_MINUTES
-from .database import Schedule, SessionLocal, StateLog, Device
+from .database import Schedule, SessionLocal, StateLog, Device, save_device_state
 from .mqtt import mqtt_client
-from .state import device_states
+from .state import device_states, device_to_group, group_to_devices
 
 
 def log_device_states():
@@ -47,9 +47,19 @@ def run_scheduled_actions():
             allowed_days = {d.strip() for d in sched.days.split(",") if d.strip()}
             if current_day not in allowed_days:
                 continue
-            device_states[sched.device_id] = sched.action
-            mqtt_client.publish(sched.device_id, str(sched.action), qos=1, retain=True)
-            print(f"[scheduler] {sched.device_id} = {'ON' if sched.action else 'OFF'} (schedule #{sched.id})")
+            group_topic = device_to_group.get(sched.device_id)
+            if group_topic:
+                members = group_to_devices.get(group_topic, [sched.device_id])
+                mqtt_client.publish(group_topic, str(sched.action), qos=1, retain=True)
+                for member in members:
+                    device_states[member] = sched.action
+                    save_device_state(db, member, sched.action)
+                print(f"[scheduler] {sched.device_id} (group {group_topic}) = {'ON' if sched.action else 'OFF'} (schedule #{sched.id})")
+            else:
+                device_states[sched.device_id] = sched.action
+                mqtt_client.publish(sched.device_id, str(sched.action), qos=1, retain=True)
+                save_device_state(db, sched.device_id, sched.action)
+                print(f"[scheduler] {sched.device_id} = {'ON' if sched.action else 'OFF'} (schedule #{sched.id})")
     except Exception as e:
         print(f"Schedule runner error: {e}")
     finally:
