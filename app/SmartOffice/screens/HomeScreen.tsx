@@ -219,7 +219,7 @@ const HomeScreen: React.FC = () => {
     applyCabinUpdate((c) => (c.id === cabinId ? { ...c, light: { ...c.light, isOn: !c.light.isOn } } : c));
     if (topic) {
       markPending(topic, nextOn);
-      devicesApi.toggle(topic).catch(async () => {
+      devicesApi.setDevice(topic, nextOn ? 1 : 0).catch(async () => {
         delete pendingRef.current[topic]; // request failed — let reconcile correct us
         try {
           const states = await devicesApi.getStates();
@@ -236,7 +236,7 @@ const HomeScreen: React.FC = () => {
     applyCabinUpdate((c) => (c.id === cabinId ? { ...c, fan: { ...c.fan, isOn: !c.fan.isOn } } : c));
     if (topic) {
       markPending(topic, nextOn);
-      devicesApi.toggle(topic).catch(async () => {
+      devicesApi.setDevice(topic, nextOn ? 1 : 0).catch(async () => {
         delete pendingRef.current[topic];
         try {
           const states = await devicesApi.getStates();

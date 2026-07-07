@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, StatusBar, Image } from 'react-native';
 import { EdgeInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -40,6 +40,10 @@ const AcknowledgementsModal: React.FC<AcknowledgementsModalProps> = ({ visible, 
   useEffect(() => {
     if (visible) setSessionKey((k) => k + 1);
   }, [visible]);
+
+  // Avatars whose image failed to load (e.g. placeholder not yet replaced with a
+  // real photo). We fall back to showing the contributor's initials for these.
+  const [failedAvatars, setFailedAvatars] = useState<Record<string, boolean>>({});
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
@@ -83,7 +87,15 @@ const AcknowledgementsModal: React.FC<AcknowledgementsModalProps> = ({ visible, 
                     style={[styles.contributorRow, idx < CONTRIBUTORS.length - 1 && styles.contributorRowBorder]}
                   >
                     <View style={styles.avatar}>
-                      <Text style={styles.avatarText}>{getInitials(c.name)}</Text>
+                      {c.avatar && !failedAvatars[c.name] ? (
+                        <Image
+                          source={c.avatar}
+                          style={styles.avatarImage}
+                          onError={() => setFailedAvatars((prev) => ({ ...prev, [c.name]: true }))}
+                        />
+                      ) : (
+                        <Text style={styles.avatarText}>{getInitials(c.name)}</Text>
+                      )}
                     </View>
                     <View style={styles.contributorInfo}>
                       <Text style={styles.contributorName}>{c.name}</Text>
@@ -168,6 +180,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginRight: SPACING.md,
   },
   avatarText: { color: colors.accent, fontSize: 13, fontWeight: '700' },
+  avatarImage: { width: '100%', height: '100%', borderRadius: 21 },
   contributorInfo: { flex: 1 },
   contributorName: { color: colors.text, fontSize: 15, fontWeight: '600' },
   contributorRole: { color: colors.textMuted, fontSize: 12, marginTop: 2 },

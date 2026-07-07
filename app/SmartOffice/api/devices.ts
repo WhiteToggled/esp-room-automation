@@ -16,7 +16,16 @@ export interface Schedule {
   created_at: string;
 }
 
-export type ScheduleCreate = Omit<Schedule, 'id' | 'created_by' | 'created_at'>;
+// Creation targets one or more devices at once; the server creates (and returns)
+// one Schedule per device, all sharing the same time/days/action settings.
+export interface ScheduleCreate {
+  device_ids: string[];
+  action: number;
+  hour: number;
+  minute: number;
+  days: string[];
+  enabled: boolean;
+}
 export type ScheduleUpdate = Partial<Omit<Schedule, 'id' | 'device_id' | 'created_by' | 'created_at'>>;
 
 // GET /states now returns device states plus a room-prefix → display-name map.
@@ -51,8 +60,24 @@ export async function renameRoom(roomId: string, name: string): Promise<Room> {
   return client.put(`/rooms/${encodeURIComponent(roomId)}`, { name });
 }
 
-export async function toggle(deviceId: string) {
-  return client.post(`/toggle/${encodeURIComponent(deviceId)}`, {});
+// Response from POST /set/{device_id}. `affected_ids` lists every device the
+// server changed — more than one when the device belongs to a group (e.g.
+// toggling room1/l1 also switches its grouped siblings).
+export interface SetResponse {
+  id: string;
+  new_state: 0 | 1;
+  affected_ids: string[];
+}
+
+// Set a device to an explicit state (1 = on, 0 = off). Replaces the old
+// /toggle endpoint, which flipped whatever state the server currently held.
+export async function setDevice(deviceId: string, state: 0 | 1): Promise<SetResponse> {
+  return client.post(`/set/${encodeURIComponent(deviceId)}?state=${state}`, {});
+}
+
+// Set every device the caller can see to an explicit state. Admin only.
+export async function setAll(state: 0 | 1): Promise<{ message: string; count: number; new_state: 0 | 1 }> {
+  return client.post(`/set-all?state=${state}`, {});
 }
 
 export async function lightsOn() {
@@ -107,7 +132,9 @@ export async function listSchedules(): Promise<Schedule[]> {
   return client.get('/schedules');
 }
 
-export async function createSchedule(data: ScheduleCreate): Promise<Schedule> {
+// Returns one created Schedule per device_id. Validation is all-or-nothing:
+// if any device is invalid/forbidden the server creates none.
+export async function createSchedule(data: ScheduleCreate): Promise<Schedule[]> {
   return client.post('/schedules', data);
 }
 

@@ -26,7 +26,7 @@ const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 const DAYS_LABEL = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 const DEFAULT_FORM: ScheduleCreate = {
-  device_id: ALL_DEVICES[0],
+  device_ids: [ALL_DEVICES[0]],
   action: 1,
   hour: 8,
   minute: 0,
@@ -82,14 +82,30 @@ const ScheduleFormModal: React.FC<ScheduleFormProps> = ({
       days: f.days.includes(day) ? f.days.filter((x) => x !== day) : [...f.days, day],
     }));
 
+  const isEditing = editId !== null;
+
+  const toggleDevice = (id: string) =>
+    setForm((f) => ({
+      ...f,
+      device_ids: f.device_ids.includes(id)
+        ? f.device_ids.filter((x) => x !== id)
+        : [...f.device_ids, id],
+    }));
+
   const handleSave = async () => {
+    if (!isEditing && form.device_ids.length === 0) { Alert.alert('Validation', 'Select at least one device.'); return; }
     if (!form.days.length) { Alert.alert('Validation', 'Select at least one day.'); return; }
     setSaving(true);
     await onSave(form, editId);
     setSaving(false);
   };
 
-  const isLight = form.device_id.includes('/l');
+  const editDevice = form.device_ids[0] ?? '';
+  const editIsLight = editDevice.includes('/l');
+  const deviceSummary =
+    form.device_ids.length === 0 ? 'Select devices'
+    : form.device_ids.length === 1 ? formatDevice(form.device_ids[0])
+    : `${form.device_ids.length} devices selected`;
 
   return (
     <Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>
@@ -117,62 +133,81 @@ const ScheduleFormModal: React.FC<ScheduleFormProps> = ({
             keyboardShouldPersistTaps="handled"
           >
 
-            {/* ── Device ── */}
-            <Text style={fm.label}>DEVICE</Text>
-            <TouchableOpacity
-              style={[fm.deviceField, deviceExpanded && fm.deviceFieldOpen]}
-              onPress={() => setDeviceExpanded((v) => !v)}
-              activeOpacity={0.75}
-            >
-              <View style={[fm.deviceIcon, isLight ? fm.iconLight : fm.iconFan]}>
-                <Ionicons
-                  name={isLight ? 'bulb-outline' : 'sync-outline'}
-                  size={16}
-                  color={isLight ? colors.accent : colors.blue}
-                />
+            {/* ── Device(s) ── */}
+            <Text style={fm.label}>{isEditing ? 'DEVICE' : 'DEVICES'}</Text>
+            {isEditing ? (
+              // A schedule's device can't be reassigned — show it read-only.
+              <View style={fm.deviceField}>
+                <View style={[fm.deviceIcon, editIsLight ? fm.iconLight : fm.iconFan]}>
+                  <Ionicons
+                    name={editIsLight ? 'bulb-outline' : 'sync-outline'}
+                    size={16}
+                    color={editIsLight ? colors.accent : colors.blue}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={fm.deviceName}>{formatDevice(editDevice)}</Text>
+                  <Text style={fm.deviceSub}>Device can’t be changed</Text>
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={fm.deviceName}>{formatDevice(form.device_id)}</Text>
-                <Text style={fm.deviceSub}>{form.device_id}</Text>
-              </View>
-              <Ionicons
-                name={deviceExpanded ? 'chevron-up' : 'chevron-down'}
-                size={16}
-                color={colors.textMuted}
-              />
-            </TouchableOpacity>
+            ) : (
+              <>
+                <TouchableOpacity
+                  style={[fm.deviceField, deviceExpanded && fm.deviceFieldOpen]}
+                  onPress={() => setDeviceExpanded((v) => !v)}
+                  activeOpacity={0.75}
+                >
+                  <View style={[fm.deviceIcon, fm.iconLight]}>
+                    <Ionicons name="grid-outline" size={16} color={colors.accent} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={fm.deviceName}>{deviceSummary}</Text>
+                    <Text style={fm.deviceSub}>{form.device_ids.length} selected · tap to choose</Text>
+                  </View>
+                  <Ionicons
+                    name={deviceExpanded ? 'chevron-up' : 'chevron-down'}
+                    size={16}
+                    color={colors.textMuted}
+                  />
+                </TouchableOpacity>
 
-            {/* Inline device list */}
-            {deviceExpanded && (
-              <View style={fm.deviceList}>
-                {availableDevices.map((id) => {
-                  const active = id === form.device_id;
-                  const light = id.includes('/l');
-                  return (
-                    <TouchableOpacity
-                      key={id}
-                      style={[fm.deviceOption, active && fm.deviceOptionActive]}
-                      onPress={() => { setForm((f) => ({ ...f, device_id: id })); setDeviceExpanded(false); }}
-                      activeOpacity={0.7}
-                    >
-                      <View style={[fm.deviceOptionIcon, light ? fm.iconLight : fm.iconFan]}>
-                        <Ionicons
-                          name={light ? 'bulb-outline' : 'sync-outline'}
-                          size={13}
-                          color={light ? colors.accent : colors.blue}
-                        />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[fm.deviceOptionName, active && fm.deviceOptionNameActive]}>
-                          {formatDevice(id)}
-                        </Text>
-                        <Text style={fm.deviceOptionId}>{id}</Text>
-                      </View>
-                      {active && <Ionicons name="checkmark-circle" size={16} color={colors.accent} />}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+                {/* Inline multi-select device list */}
+                {deviceExpanded && (
+                  <View style={fm.deviceList}>
+                    {availableDevices.map((id) => {
+                      const active = form.device_ids.includes(id);
+                      const light = id.includes('/l');
+                      return (
+                        <TouchableOpacity
+                          key={id}
+                          style={[fm.deviceOption, active && fm.deviceOptionActive]}
+                          onPress={() => toggleDevice(id)}
+                          activeOpacity={0.7}
+                        >
+                          <View style={[fm.deviceOptionIcon, light ? fm.iconLight : fm.iconFan]}>
+                            <Ionicons
+                              name={light ? 'bulb-outline' : 'sync-outline'}
+                              size={13}
+                              color={light ? colors.accent : colors.blue}
+                            />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[fm.deviceOptionName, active && fm.deviceOptionNameActive]}>
+                              {formatDevice(id)}
+                            </Text>
+                            <Text style={fm.deviceOptionId}>{id}</Text>
+                          </View>
+                          <Ionicons
+                            name={active ? 'checkbox' : 'square-outline'}
+                            size={20}
+                            color={active ? colors.accent : colors.textMuted}
+                          />
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+              </>
             )}
 
             {/* ── Time ── */}
@@ -542,8 +577,9 @@ const SchedulesScreen: React.FC = () => {
         });
         setSchedules((prev) => prev.map((s) => (s.id === editId ? updated : s)));
       } else {
+        // One schedule is created per selected device — append them all.
         const created = await api.createSchedule(form);
-        setSchedules((prev) => [...prev, created]);
+        setSchedules((prev) => [...prev, ...created]);
       }
       setFormVisible(false);
       setEditTarget(null);
@@ -582,8 +618,8 @@ const SchedulesScreen: React.FC = () => {
   const openEdit   = (s: Schedule) => { setEditTarget(s); setFormVisible(true); };
 
   const formInitial: ScheduleCreate = editTarget
-    ? { device_id: editTarget.device_id, action: editTarget.action, hour: editTarget.hour, minute: editTarget.minute, days: [...editTarget.days], enabled: editTarget.enabled }
-    : { ...DEFAULT_FORM, device_id: availableDevices[0] ?? ALL_DEVICES[0] };
+    ? { device_ids: [editTarget.device_id], action: editTarget.action, hour: editTarget.hour, minute: editTarget.minute, days: [...editTarget.days], enabled: editTarget.enabled }
+    : { ...DEFAULT_FORM, device_ids: [availableDevices[0] ?? ALL_DEVICES[0]] };
 
   return (
     <View style={s.root}>
