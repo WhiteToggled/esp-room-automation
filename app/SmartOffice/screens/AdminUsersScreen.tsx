@@ -29,16 +29,33 @@ const roomToCabinId = (room: string) => `cabin-${room.replace('r', '')}`;
 const cabinIdToRoom = (cabinId: string) => `r${cabinId.replace('cabin-', '')}`;
 
 interface AssignModalProps {
-  user: BackendUser | null;
+  user: BackendUser;
   onClose: () => void;
-  onAssign: (cabinId: string | null) => void;
+  onSave: (cabinIds: string[]) => Promise<void>;
 }
 
-const AssignModal: React.FC<AssignModalProps> = ({ user, onClose, onAssign }) => {
+const AssignModal: React.FC<AssignModalProps> = ({ user, onClose, onSave }) => {
   const { colors } = useTheme();
   const modal = useMemo(() => createModalStyles(colors), [colors]);
-  if (!user) return null;
-  const assignedCabinId = user.rooms.length > 0 ? roomToCabinId(user.rooms[0]) : null;
+  const [selected, setSelected] = useState<Set<string>>(
+    () => new Set(user.rooms.map(roomToCabinId))
+  );
+  const [saving, setSaving] = useState(false);
+
+  const toggle = (cabinId: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(cabinId)) next.delete(cabinId);
+      else next.add(cabinId);
+      return next;
+    });
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onSave(Array.from(selected));
+  };
+
+  const noneSelected = selected.size === 0;
 
   return (
     <Modal transparent animationType="fade" visible onRequestClose={onClose}>
@@ -47,45 +64,26 @@ const AssignModal: React.FC<AssignModalProps> = ({ user, onClose, onAssign }) =>
           {/* Header */}
           <View style={modal.header}>
             <View>
-              <Text style={modal.title}>Assign Cabin</Text>
-              <Text style={modal.subtitle}>{user.username}</Text>
+              <Text style={modal.title}>Assign Cabins</Text>
+              <Text style={modal.subtitle}>{user.username} · {selected.size} selected</Text>
             </View>
             <TouchableOpacity style={modal.closeBtn} onPress={onClose}>
               <Ionicons name="close" size={18} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
-          {/* No cabin option */}
-          <TouchableOpacity
-            style={[
-              modal.cabinRow,
-              assignedCabinId === null && modal.cabinRowActive,
-            ]}
-            onPress={() => onAssign(null)}
-            activeOpacity={0.7}
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            style={modal.list}
+            contentContainerStyle={{ paddingVertical: SPACING.sm }}
           >
-            <View style={[modal.cabinIcon, { backgroundColor: 'rgba(255,255,255,0.06)' }]}>
-              <Ionicons name="close-circle-outline" size={18} color={colors.textMuted} />
-            </View>
-            <View style={modal.cabinInfo}>
-              <Text style={modal.cabinName}>No Cabin</Text>
-              <Text style={modal.cabinSub}>Remove cabin assignment</Text>
-            </View>
-            {assignedCabinId === null && (
-              <Ionicons name="checkmark-circle" size={20} color={colors.accent} />
-            )}
-          </TouchableOpacity>
-
-          <View style={modal.divider} />
-
-          <ScrollView showsVerticalScrollIndicator={false} style={modal.list}>
             {INITIAL_CABINS.map((cabin) => {
-              const isActive = assignedCabinId === cabin.id;
+              const isActive = selected.has(cabin.id);
               return (
                 <TouchableOpacity
                   key={cabin.id}
                   style={[modal.cabinRow, isActive && modal.cabinRowActive]}
-                  onPress={() => onAssign(cabin.id)}
+                  onPress={() => toggle(cabin.id)}
                   activeOpacity={0.7}
                 >
                   <View style={[modal.cabinIcon, isActive && modal.cabinIconActive]}>
@@ -101,13 +99,36 @@ const AssignModal: React.FC<AssignModalProps> = ({ user, onClose, onAssign }) =>
                     </Text>
                     <Text style={modal.cabinSub}>Light · Fan</Text>
                   </View>
-                  {isActive && (
-                    <Ionicons name="checkmark-circle" size={20} color={colors.accent} />
-                  )}
+                  <Ionicons
+                    name={isActive ? 'checkbox' : 'square-outline'}
+                    size={22}
+                    color={isActive ? colors.accent : colors.textMuted}
+                  />
                 </TouchableOpacity>
               );
             })}
           </ScrollView>
+
+          {/* Footer actions */}
+          <View style={modal.footer}>
+            <TouchableOpacity
+              style={modal.clearBtn}
+              onPress={() => setSelected(new Set())}
+              disabled={noneSelected}
+              activeOpacity={0.7}
+            >
+              <Text style={[modal.clearBtnText, noneSelected && { opacity: 0.4 }]}>Clear all</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[modal.saveBtn, saving && { opacity: 0.6 }]}
+              onPress={handleSave}
+              disabled={saving}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+              <Text style={modal.saveBtnText}>{saving ? 'Saving…' : 'Save'}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </Modal>
@@ -140,9 +161,11 @@ const AdminUsersScreen: React.FC<AdminUsersScreenProps> = ({ refreshKey }) => {
     setRefreshing(false);
   }, [fetchUsers]);
 
-  const handleAssign = async (cabinId: string | null) => {
+  const handleSave = async (cabinIds: string[]) => {
     if (!selectedUser) return;
-    const rooms = cabinId ? [cabinIdToRoom(cabinId)] : [];
+    const rooms = cabinIds
+      .map(cabinIdToRoom)
+      .sort((a, b) => Number(a.replace('r', '')) - Number(b.replace('r', '')));
     try {
       await assignUserRooms(selectedUser.username, rooms);
       setUsers((prev) =>
@@ -152,17 +175,16 @@ const AdminUsersScreen: React.FC<AdminUsersScreenProps> = ({ refreshKey }) => {
     setSelectedUser(null);
   };
 
-  const getCabinLabel = (rooms: string[]) => {
-    if (!rooms.length) return null;
-    const cabinId = roomToCabinId(rooms[0]);
-    return INITIAL_CABINS.find((c) => c.id === cabinId)?.name ?? null;
-  };
+  const getCabinNames = (rooms: string[]): string[] =>
+    rooms
+      .map((r) => INITIAL_CABINS.find((c) => c.id === roomToCabinId(r))?.name ?? r)
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
   const getInitials = (name: string) =>
     name.slice(0, 2).toUpperCase();
 
   const renderUser = ({ item }: { item: BackendUser }) => {
-    const cabinLabel = getCabinLabel(item.rooms);
+    const cabinNames = getCabinNames(item.rooms);
     return (
       <View style={styles.userCard}>
         <View style={styles.avatar}>
@@ -172,10 +194,14 @@ const AdminUsersScreen: React.FC<AdminUsersScreenProps> = ({ refreshKey }) => {
         <View style={styles.userInfo}>
           <Text style={styles.userName}>{item.username}</Text>
           <Text style={styles.userEmail} numberOfLines={1}>{item.role}</Text>
-          {cabinLabel ? (
-            <View style={styles.cabinChip}>
-              <Ionicons name="grid" size={10} color={colors.accent} />
-              <Text style={styles.cabinChipText}>{cabinLabel}</Text>
+          {cabinNames.length > 0 ? (
+            <View style={styles.chipsWrap}>
+              {cabinNames.map((name) => (
+                <View key={name} style={styles.cabinChip}>
+                  <Ionicons name="grid" size={10} color={colors.accent} />
+                  <Text style={styles.cabinChipText}>{name}</Text>
+                </View>
+              ))}
             </View>
           ) : (
             <View style={styles.unassignedChip}>
@@ -240,11 +266,14 @@ const AdminUsersScreen: React.FC<AdminUsersScreenProps> = ({ refreshKey }) => {
         )}
       </SafeAreaView>
 
-      <AssignModal
-        user={selectedUser}
-        onClose={() => setSelectedUser(null)}
-        onAssign={handleAssign}
-      />
+      {selectedUser && (
+        <AssignModal
+          key={selectedUser.username}
+          user={selectedUser}
+          onClose={() => setSelectedUser(null)}
+          onSave={handleSave}
+        />
+      )}
     </View>
   );
 };
@@ -289,11 +318,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   userInfo: { flex: 1 },
   userName: { color: colors.text, fontSize: 15, fontWeight: '600' },
   userEmail: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
+  chipsWrap: {
+    flexDirection: 'row', flexWrap: 'wrap',
+    marginTop: 5, gap: 4,
+  },
   cabinChip: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: 'rgba(47,128,237,0.12)',
     borderRadius: RADIUS.full, paddingHorizontal: 8, paddingVertical: 3,
-    alignSelf: 'flex-start', marginTop: 5,
   },
   cabinChipText: { color: colors.accent, fontSize: 11, fontWeight: '600', marginLeft: 4 },
   unassignedChip: {
@@ -345,7 +377,19 @@ const createModalStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   list: { paddingHorizontal: SPACING.xl },
-  divider: { height: 1, backgroundColor: colors.glassBorder, marginHorizontal: SPACING.xl, marginVertical: SPACING.sm },
+  footer: {
+    flexDirection: 'row', alignItems: 'center', gap: SPACING.md,
+    paddingHorizontal: SPACING.xl, paddingTop: SPACING.md,
+    borderTopWidth: 1, borderTopColor: colors.glassBorder,
+  },
+  clearBtn: { paddingVertical: SPACING.sm, paddingHorizontal: SPACING.sm },
+  clearBtnText: { color: colors.textSecondary, fontSize: 13, fontWeight: '600' },
+  saveBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: SPACING.sm, backgroundColor: colors.accent,
+    borderRadius: RADIUS.md, height: 48,
+  },
+  saveBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   cabinRow: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: SPACING.xl, paddingVertical: SPACING.md,

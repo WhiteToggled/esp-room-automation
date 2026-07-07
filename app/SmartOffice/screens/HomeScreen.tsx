@@ -139,9 +139,10 @@ const HomeScreen: React.FC = () => {
     transform: [{ translateX: (5 - offset.value) * SCREEN_WIDTH }],
   }));
 
+  const assignedCabinIds = user?.assignedCabinIds ?? [];
   const visibleCabins = useMemo(
-    () => (isAdmin ? cabins : cabins.filter((c) => c.id === user?.assignedCabinId)),
-    [cabins, isAdmin, user?.assignedCabinId]
+    () => (isAdmin ? cabins : cabins.filter((c) => assignedCabinIds.includes(c.id))),
+    [cabins, isAdmin, assignedCabinIds.join(',')]
   );
 
   // Kept in sync with `cabins` so the toggle callbacks below can read current
@@ -345,7 +346,7 @@ const HomeScreen: React.FC = () => {
 
   const expandedCabin = cabins.find((c) => c.id === expandedCabinId) ?? null;
 
-  const hasNoCabin = !isAdmin && !user?.assignedCabinId;
+  const hasNoCabin = !isAdmin && assignedCabinIds.length === 0;
 
   return (
     <View style={styles.root}>
@@ -475,7 +476,7 @@ const HomeScreen: React.FC = () => {
 
       <ExpandedCabinModal
         cabin={expandedCabin}
-        canRename={isAdmin || !!user?.assignedCabinId}
+        canRename={isAdmin || (!!expandedCabin && assignedCabinIds.includes(expandedCabin.id))}
         onClose={() => setExpandedCabinId(null)}
         onToggleLight={() => expandedCabin && toggleLight(expandedCabin.id)}
         onToggleFan={() => expandedCabin && toggleFan(expandedCabin.id)}

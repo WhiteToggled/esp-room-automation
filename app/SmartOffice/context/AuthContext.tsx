@@ -9,8 +9,13 @@ export interface AppUser {
   email: string;
   password: string;
   role: 'admin' | 'user';
-  assignedCabinId: string | null;
+  // A user can be assigned any number of cabins (rooms). Empty = none.
+  assignedCabinIds: string[];
 }
+
+// r1 -> cabin-1
+const roomsToCabinIds = (rooms: string[]): string[] =>
+  rooms.map((r) => 'cabin-' + r.replace('r', ''));
 
 interface AuthContextValue {
   user: AppUser | null;
@@ -26,7 +31,7 @@ const ADMIN: AppUser = {
   email: 'admin@nestboard.com',
   password: 'admin123',
   role: 'admin',
-  assignedCabinId: null,
+  assignedCabinIds: [],
 };
 
 const SESSION_KEY = 'nestboard_session';
@@ -58,16 +63,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // Fetch live profile so room assignments are always current
             const me = await apiClient.get('/me');
             const rooms: string[] = me.rooms ?? [];
-            const assignedCabinId = rooms[0]
-              ? 'cabin-' + rooms[0].replace('r', '')
-              : null;
             setUser({
               id: me.username,
               name: me.username,
               email: me.username,
               password: '',
               role: me.role === 'admin' ? 'admin' : 'user',
-              assignedCabinId,
+              assignedCabinIds: roomsToCabinIds(rooms),
             });
           } catch (_) {
             // Token expired — force re-login
@@ -97,7 +99,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const token = resp.access_token;
       const role = resp.role ?? 'user';
       const rooms: string[] = resp.rooms ?? [];
-      const assignedCabinId = rooms[0] ? 'cabin-' + rooms[0].replace('r', '') : null;
       await AsyncStorage.setItem(TOKEN_STORAGE_KEY, token);
       await AsyncStorage.setItem(SESSION_KEY, username);
       const userObj: AppUser = {
@@ -106,7 +107,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: email.toLowerCase(),
         password: '',
         role: role === 'admin' ? 'admin' : 'user',
-        assignedCabinId,
+        assignedCabinIds: roomsToCabinIds(rooms),
       };
       setUser(userObj);
       return true;
@@ -139,7 +140,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: email.trim().toLowerCase(),
         password: '',
         role: 'user',
-        assignedCabinId: null,
+        assignedCabinIds: [],
       };
       setUser(newUser);
       return { success: true };

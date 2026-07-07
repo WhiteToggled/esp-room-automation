@@ -503,11 +503,12 @@ const SchedulesScreen: React.FC = () => {
   const [formVisible, setFormVisible] = useState(false);
   const [editTarget, setEditTarget] = useState<Schedule | null>(null);
 
+  const assignedCabinIds = user?.assignedCabinIds ?? [];
   const availableDevices = useMemo(() => {
     if (isAdmin) return ALL_DEVICES;
-    const room = user?.assignedCabinId ? `r${user.assignedCabinId.replace('cabin-', '')}` : null;
-    return room ? ALL_DEVICES.filter((d) => d.startsWith(`${room}/`)) : [];
-  }, [isAdmin, user?.assignedCabinId]);
+    const rooms = assignedCabinIds.map((id) => `r${id.replace('cabin-', '')}`);
+    return ALL_DEVICES.filter((d) => rooms.some((r) => d.startsWith(`${r}/`)));
+  }, [isAdmin, assignedCabinIds.join(',')]);
 
   // Non-admin users only see schedules for their own cabin
   const visibleSchedules = useMemo(
