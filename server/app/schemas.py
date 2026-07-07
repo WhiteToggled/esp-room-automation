@@ -6,9 +6,10 @@ from pydantic import BaseModel, field_validator
 from .config import VALID_DAYS
 
 
-class ToggleResponse(BaseModel):
+class SetResponse(BaseModel):
     id: str
     new_state: int
+    affected_ids: List[str] = []
 
 
 class StateLogEntry(BaseModel):
@@ -38,6 +39,11 @@ class UserRoomsUpdate(BaseModel):
     rooms: List[str]
 
 
+class RenameRoomRequest(BaseModel):
+    name: str
+
+
+
 class ScheduleResponse(BaseModel):
     id: int
     device_id: str
@@ -54,12 +60,19 @@ class ScheduleResponse(BaseModel):
 
 
 class ScheduleCreate(BaseModel):
-    device_id: str
+    device_ids: List[str]
     action: int
     hour: int
     minute: int
     days: List[str]
     enabled: bool = True
+
+    @field_validator("device_ids")
+    @classmethod
+    def device_ids_nonempty(cls, v):
+        if not v:
+            raise ValueError("device_ids must contain at least one device")
+        return v
 
     @field_validator("action")
     @classmethod

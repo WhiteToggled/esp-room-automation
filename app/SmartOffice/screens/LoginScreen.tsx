@@ -168,18 +168,18 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   glowTopRight: {
     position: 'absolute', top: -80, right: -80,
     width: 260, height: 260, borderRadius: 130,
-    backgroundColor: 'rgba(255,122,0,0.08)',
+    backgroundColor: 'rgba(47,128,237,0.08)',
   },
   glowBottomLeft: {
     position: 'absolute', bottom: -60, left: -60,
     width: 220, height: 220, borderRadius: 110,
-    backgroundColor: 'rgba(255,122,0,0.05)',
+    backgroundColor: 'rgba(47,128,237,0.05)',
   },
   hero: { alignItems: 'center', marginBottom: SPACING.xxxl },
   logoCircle: {
     width: 72, height: 72, borderRadius: 36,
-    backgroundColor: 'rgba(255,122,0,0.12)',
-    borderWidth: 1, borderColor: 'rgba(255,122,0,0.3)',
+    backgroundColor: 'rgba(47,128,237,0.12)',
+    borderWidth: 1, borderColor: 'rgba(47,128,237,0.3)',
     alignItems: 'center', justifyContent: 'center',
     marginBottom: SPACING.md,
   },

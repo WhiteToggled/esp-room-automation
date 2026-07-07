@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import React, { useState, useCallback, useMemo, memo } from 'react';
 import {
   View,
   Text,
@@ -16,8 +16,13 @@ import { SPACING, RADIUS, ThemeColors } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import * as api from '../api/devices';
 import { StateLogEntry } from '../api/devices';
+import { useCachedResource } from '../hooks/useCachedResource';
 import LogsChart from '../components/LogsChart';
 import FadeInView from '../components/FadeInView';
+
+// Logs are read-heavy and rarely change between quick tab switches, so serve a
+// cached copy and only revalidate over the network once it's older than this.
+const LOGS_TTL = 30_000;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -131,40 +136,28 @@ interface LogsScreenProps {
 const LogsScreen: React.FC<LogsScreenProps> = ({ isActive }) => {
   const { colors, theme } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const [logs, setLogs] = useState<StateLogEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [capturing, setCapturing] = useState(false);
 
-  const fetchLogs = useCallback(async () => {
-    try {
-      const data = await api.getLogs(100);
-      setLogs(data);
-    } catch (_) {}
-  }, []);
-
-  useEffect(() => {
-    fetchLogs().finally(() => setLoading(false));
-  }, [fetchLogs]);
-
-  useEffect(() => {
-    if (isActive) fetchLogs();
-  }, [isActive, fetchLogs]);
-
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await fetchLogs();
-    setRefreshing(false);
-  }, [fetchLogs]);
+  const {
+    data: logs,
+    loading,
+    refreshing,
+    refresh: handleRefresh,
+    reload,
+  } = useCachedResource<StateLogEntry[]>(
+    'logs:list:100',
+    () => api.getLogs(100),
+    { ttlMs: LOGS_TTL, initialData: [], active: isActive ?? true },
+  );
 
   const handleCapture = useCallback(async () => {
     setCapturing(true);
     try {
       await api.triggerLog();
-      await fetchLogs();
+      await reload(); // new snapshot — force the cache to update
     } catch (_) {}
     setCapturing(false);
-  }, [fetchLogs]);
+  }, [reload]);
 
   const renderItem = useCallback(
     ({ item, index }: { item: StateLogEntry; index: number }) => (
@@ -244,8 +237,8 @@ const LogsScreen: React.FC<LogsScreenProps> = ({ isActive }) => {
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   safe: { flex: 1 },
-  glowTR: { position: 'absolute', top: -80, right: -80, width: 280, height: 280, borderRadius: 140, backgroundColor: 'rgba(255,122,0,0.07)' },
-  glowBL: { position: 'absolute', bottom: 100, left: -60, width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(255,122,0,0.04)' },
+  glowTR: { position: 'absolute', top: -80, right: -80, width: 280, height: 280, borderRadius: 140, backgroundColor: 'rgba(47,128,237,0.07)' },
+  glowBL: { position: 'absolute', bottom: 100, left: -60, width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(47,128,237,0.04)' },
   header: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: SPACING.xl, paddingTop: SPACING.xl, paddingBottom: SPACING.lg,
@@ -271,19 +264,19 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder,
     borderRadius: RADIUS.lg, padding: SPACING.lg, marginBottom: SPACING.md,
   },
-  cardLatest: { borderColor: 'rgba(255,122,0,0.3)', backgroundColor: 'rgba(255,122,0,0.06)' },
+  cardLatest: { borderColor: 'rgba(47,128,237,0.3)', backgroundColor: 'rgba(47,128,237,0.06)' },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   timeGroup: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
   clockIcon: {
     width: 32, height: 32, borderRadius: 10,
     backgroundColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center',
   },
-  clockIconLatest: { backgroundColor: 'rgba(255,122,0,0.15)' },
+  clockIconLatest: { backgroundColor: 'rgba(47,128,237,0.15)' },
   absoluteTime: { color: colors.text, fontSize: 14, fontWeight: '600' },
   relativeTime: { color: colors.textMuted, fontSize: 11, marginTop: 1 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
   latestBadge: {
-    backgroundColor: 'rgba(255,122,0,0.15)', borderRadius: RADIUS.full,
+    backgroundColor: 'rgba(47,128,237,0.15)', borderRadius: RADIUS.full,
     paddingHorizontal: 8, paddingVertical: 3,
   },
   latestBadgeText: { color: colors.accent, fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
@@ -292,7 +285,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: RADIUS.full,
     paddingHorizontal: 8, paddingVertical: 4,
   },
-  countBadgeOn: { backgroundColor: 'rgba(255,122,0,0.12)' },
+  countBadgeOn: { backgroundColor: 'rgba(47,128,237,0.12)' },
   countText: { color: colors.textMuted, fontSize: 11, fontWeight: '700' },
   countTextOn: { color: colors.accent },
   chipGrid: {
@@ -305,7 +298,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: colors.glassBorder,
     borderRadius: RADIUS.full, paddingHorizontal: SPACING.sm, paddingVertical: 5,
   },
-  chipOn: { backgroundColor: 'rgba(255,122,0,0.1)', borderColor: 'rgba(255,122,0,0.3)' },
+  chipOn: { backgroundColor: 'rgba(47,128,237,0.1)', borderColor: 'rgba(47,128,237,0.3)' },
   chipDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted },
   chipDotOn: { backgroundColor: colors.accent },
   chipText: { color: colors.textMuted, fontSize: 11, fontWeight: '600' },

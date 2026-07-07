@@ -1,13 +1,13 @@
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from ..auth import can_access_room, get_current_user, get_room_from_device, require_admin
 from ..database import Device, get_db, save_device_state
 from ..mqtt import mqtt_client
-from ..schemas import ToggleResponse
-from ..state import device_states
+from ..schemas import SetResponse
+from ..state import device_states, device_to_group, group_to_devices
 
 router = APIRouter(tags=["Control"])
 
@@ -17,18 +17,49 @@ def _device_type(device_id: str) -> Optional[str]:
     return parts[1][0] if len(parts) >= 2 and parts[1] else None
 
 
-def _set_devices(devices: List[Device], state: int, db: Session = None) -> int:
-    for device in devices:
-        device_states[device.id] = state
-        mqtt_client.publish(device.id, str(state), qos=1, retain=True)
+def _publish_state(device_id: str, state: int, db: Session = None) -> List[str]:
+    """Publish state for a device. Returns all affected device IDs."""
+    group_topic = device_to_group.get(device_id)
+    if group_topic:
+        members = group_to_devices.get(group_topic, [device_id])
+        mqtt_client.publish(group_topic, str(state), qos=1, retain=True)
+        for member in members:
+            device_states[member] = state
+            if db:
+                save_device_state(db, member, state)
+        return members
+    else:
+        device_states[device_id] = state
+        mqtt_client.publish(device_id, str(state), qos=1, retain=True)
         if db:
-            save_device_state(db, device.id, state)
+            save_device_state(db, device_id, state)
+        return [device_id]
+
+
+def _set_devices(devices: List[Device], state: int, db: Session = None) -> int:
+    published_topics: set = set()
+    for device in devices:
+        group_topic = device_to_group.get(device.id)
+        if group_topic:
+            if group_topic not in published_topics:
+                mqtt_client.publish(group_topic, str(state), qos=1, retain=True)
+                published_topics.add(group_topic)
+            for member in group_to_devices.get(group_topic, [device.id]):
+                device_states[member] = state
+                if db:
+                    save_device_state(db, member, state)
+        else:
+            device_states[device.id] = state
+            mqtt_client.publish(device.id, str(state), qos=1, retain=True)
+            if db:
+                save_device_state(db, device.id, state)
     return len(devices)
 
 
-@router.post("/toggle/{device_id:path}", response_model=ToggleResponse)
-def toggle_device(
+@router.post("/set/{device_id:path}", response_model=SetResponse)
+def set_device(
     device_id: str,
+    state: int = Query(..., ge=0, le=1),
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
@@ -42,34 +73,25 @@ def toggle_device(
     if not device:
         raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
 
-    old_state = device_states.get(device_id, 0)
-    new_state = 0 if old_state else 1
-    print(f"[{current_user['username']}] toggle {device_id}: {'ON' if old_state else 'OFF'} → {'ON' if new_state else 'OFF'}")
-    device_states[device_id] = new_state
-    mqtt_client.publish(device_id, str(new_state), qos=1, retain=True)
-    print(f"MQTT → {device_id} = {'ON' if new_state else 'OFF'}")
-    save_device_state(db, device_id, new_state)
-    return {"id": device_id, "new_state": new_state}
+    print(f"[{current_user['username']}] set {device_id} → {'ON' if state else 'OFF'}")
+    affected = _publish_state(device_id, state, db)
+    print(f"MQTT → {device_to_group.get(device_id, device_id)} = {'ON' if state else 'OFF'}")
+    return {"id": device_id, "new_state": state, "affected_ids": affected}
 
 
-@router.post("/toggle-all")
-def toggle_all(
+@router.post("/set-all")
+def set_all(
+    state: int = Query(..., ge=0, le=1),
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_admin),
 ):
     devices = db.query(Device).all()
     if not devices:
-        return {"message": "No devices to toggle"}
+        return {"message": "No devices found"}
 
-    any_off = any(device_states.get(d.id, 0) == 0 for d in devices)
-    target_state = 1 if any_off else 0
-    print(f"[{current_user['username']}] toggle-all → {'ON' if target_state else 'OFF'} ({len(devices)} devices)")
-    for device in devices:
-        device_states[device.id] = target_state
-        mqtt_client.publish(device.id, str(target_state), qos=1, retain=True)
-        save_device_state(db, device.id, target_state)
-
-    return {"message": f"All devices set to {target_state}", "count": len(devices), "new_state": target_state}
+    print(f"[{current_user['username']}] set-all → {'ON' if state else 'OFF'} ({len(devices)} devices)")
+    count = _set_devices(devices, state, db)
+    return {"message": f"All devices set to {state}", "count": count, "new_state": state}
 
 
 @router.post("/lights/on")

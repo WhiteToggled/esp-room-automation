@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
-  ScrollView, StatusBar, Alert, ActivityIndicator,
+  ScrollView, StatusBar, Alert, ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -69,7 +69,7 @@ const createApStyles = (colors: ThemeColors) => StyleSheet.create({
   cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.lg, gap: SPACING.md },
   cardIconWrap: {
     width: 40, height: 40, borderRadius: 12,
-    backgroundColor: 'rgba(255,122,0,0.12)', borderWidth: 1, borderColor: 'rgba(255,122,0,0.25)',
+    backgroundColor: 'rgba(47,128,237,0.12)', borderWidth: 1, borderColor: 'rgba(47,128,237,0.25)',
     alignItems: 'center', justifyContent: 'center',
   },
   cardTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
@@ -80,7 +80,7 @@ const createApStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: RADIUS.md, borderWidth: 1, borderColor: colors.glassBorder,
     backgroundColor: colors.surfaceLight,
   },
-  optionActive: { borderColor: 'rgba(255,122,0,0.4)', backgroundColor: 'rgba(255,122,0,0.1)' },
+  optionActive: { borderColor: 'rgba(47,128,237,0.4)', backgroundColor: 'rgba(47,128,237,0.1)' },
   optionText: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
   optionTextActive: { color: colors.accent },
 });
@@ -218,7 +218,7 @@ const createCfStyles = (colors: ThemeColors) => StyleSheet.create({
   cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.lg, gap: SPACING.md },
   cardIconWrap: {
     width: 40, height: 40, borderRadius: 12,
-    backgroundColor: 'rgba(255,122,0,0.12)', borderWidth: 1, borderColor: 'rgba(255,122,0,0.25)',
+    backgroundColor: 'rgba(47,128,237,0.12)', borderWidth: 1, borderColor: 'rgba(47,128,237,0.25)',
     alignItems: 'center', justifyContent: 'center',
   },
   cardTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
@@ -333,7 +333,7 @@ const createUlStyles = (colors: ThemeColors) => StyleSheet.create({
   rowBorder: { borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
   avatar: {
     width: 38, height: 38, borderRadius: 10,
-    backgroundColor: 'rgba(255,122,0,0.12)', borderWidth: 1, borderColor: 'rgba(255,122,0,0.25)',
+    backgroundColor: 'rgba(47,128,237,0.12)', borderWidth: 1, borderColor: 'rgba(47,128,237,0.25)',
     alignItems: 'center', justifyContent: 'center', marginRight: SPACING.md,
   },
   avatarText: { color: colors.accent, fontSize: 13, fontWeight: '700' },
@@ -342,7 +342,7 @@ const createUlStyles = (colors: ThemeColors) => StyleSheet.create({
   meta: { color: colors.textMuted, fontSize: 11, marginTop: 2 },
   resetBtn: {
     width: 34, height: 34, borderRadius: RADIUS.sm,
-    backgroundColor: 'rgba(255,122,0,0.08)', borderWidth: 1, borderColor: 'rgba(255,122,0,0.22)',
+    backgroundColor: 'rgba(47,128,237,0.08)', borderWidth: 1, borderColor: 'rgba(47,128,237,0.22)',
     alignItems: 'center', justifyContent: 'center', marginRight: SPACING.sm,
   },
   deleteBtn: {
@@ -377,6 +377,13 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ isActive, onUserChanged
   }, []);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
+
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchUsers();
+    setRefreshing(false);
+  }, [fetchUsers]);
 
   // Clear the create-user form's success/error state when leaving this tab
   useEffect(() => {
@@ -427,6 +434,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ isActive, onUserChanged
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={s.scrollBody}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.accent} />
+          }
         >
           {/* Appearance section */}
           <AppearanceCard />
@@ -466,7 +476,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   glowTR: {
     position: 'absolute', top: -80, right: -80,
     width: 260, height: 260, borderRadius: 130,
-    backgroundColor: 'rgba(255,122,0,0.07)',
+    backgroundColor: 'rgba(47,128,237,0.07)',
   },
   header: {
     paddingHorizontal: SPACING.xl, paddingTop: SPACING.xl, paddingBottom: SPACING.lg,

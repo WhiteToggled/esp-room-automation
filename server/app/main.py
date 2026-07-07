@@ -3,27 +3,21 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .config import CORS_ORIGINS, LOG_INTERVAL_MINUTES
-from .database import Device, DeviceState, SessionLocal
-from .state import device_states
+from .config import CORS_ORIGINS, DEVICE_TOPIC_MAP, LOG_INTERVAL_MINUTES
+from .database import Device, DeviceState, RoomName, SessionLocal
+from .state import device_states, device_to_group, group_to_devices, room_names
 from .mqtt import mqtt_client
 from .routers import admin, auth, control, monitoring, ota, schedules
 from .scheduler import scheduler
 from .users_db import init_users_db
-
-INITIAL_DEVICES = [
-    "r1/l1", "r2/l1", "r3/l1", "r4/l1",
-    "r5/l1", "r6/l1", "r7/l1", "r8/l1",
-    "r1/f1", "r2/f1", "r3/f1", "r4/f1",
-    "r5/f1", "r6/f1", "r7/f1", "r8/f1",
-]
-
+from .auth import get_room_from_device
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    desired = set(DEVICE_TOPIC_MAP.keys())
+
     db = SessionLocal()
     try:
-        desired = set(INITIAL_DEVICES)
         existing = {d.id for d in db.query(Device).all()}
         for name in desired - existing:
             db.add(Device(id=name))
@@ -32,8 +26,22 @@ async def lifespan(app: FastAPI):
         db.commit()
         for ds in db.query(DeviceState).all():
             device_states[ds.device_id] = ds.state
+
+        all_room_ids = {get_room_from_device(did) for did in desired if get_room_from_device(did)}
+        existing_room_names = {rn.room_id for rn in db.query(RoomName).all()}
+        for room_id in all_room_ids:
+            if room_id not in existing_room_names:
+                db.add(RoomName(room_id=room_id, name=room_id))
+        db.commit()
+        for rn in db.query(RoomName).all():
+            room_names[rn.room_id] = rn.name
     finally:
         db.close()
+
+    for device_id, mqtt_topic in DEVICE_TOPIC_MAP.items():
+        if mqtt_topic != device_id:
+            device_to_group[device_id] = mqtt_topic
+            group_to_devices.setdefault(mqtt_topic, []).append(device_id)
 
     init_users_db()
     scheduler.start()

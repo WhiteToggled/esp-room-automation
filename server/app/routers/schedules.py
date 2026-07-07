@@ -25,37 +25,45 @@ def _to_response(sched: Schedule) -> ScheduleResponse:
     )
 
 
-@router.post("/schedules", response_model=ScheduleResponse, status_code=201)
+@router.post("/schedules", response_model=List[ScheduleResponse], status_code=201)
 def create_schedule(
     schedule: ScheduleCreate,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    room = get_room_from_device(schedule.device_id)
-    if not room:
-        raise HTTPException(status_code=400, detail="Invalid device_id — expected 'room/device'")
-    if not can_access_room(current_user, room):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Access denied: room '{room}' is not in your assigned rooms",
-        )
-    if not db.query(Device).filter(Device.id == schedule.device_id).first():
-        raise HTTPException(status_code=404, detail=f"Device '{schedule.device_id}' not found")
+    for device_id in schedule.device_ids:
+        room = get_room_from_device(device_id)
+        if not room:
+            raise HTTPException(status_code=400, detail=f"Invalid device_id '{device_id}' — expected 'room/device'")
+        if not can_access_room(current_user, room):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied: room '{room}' is not in your assigned rooms",
+            )
+        if not db.query(Device).filter(Device.id == device_id).first():
+            raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
 
-    sched = Schedule(
-        device_id=schedule.device_id,
-        action=schedule.action,
-        hour=schedule.hour,
-        minute=schedule.minute,
-        days=",".join(schedule.days),
-        enabled=1 if schedule.enabled else 0,
-        created_by=current_user["username"],
-    )
-    db.add(sched)
+    days_str = ",".join(schedule.days)
+    created = []
+    for device_id in schedule.device_ids:
+        sched = Schedule(
+            device_id=device_id,
+            action=schedule.action,
+            hour=schedule.hour,
+            minute=schedule.minute,
+            days=days_str,
+            enabled=1 if schedule.enabled else 0,
+            created_by=current_user["username"],
+        )
+        db.add(sched)
+        db.flush()
+        created.append(sched)
+
     db.commit()
-    db.refresh(sched)
-    print(f"[{current_user['username']}] schedule #{sched.id} created: {sched.device_id} {'ON' if sched.action else 'OFF'} @ {sched.hour:02d}:{sched.minute:02d} [{sched.days}]")
-    return _to_response(sched)
+    for sched in created:
+        db.refresh(sched)
+        print(f"[{current_user['username']}] schedule #{sched.id} created: {sched.device_id} {'ON' if sched.action else 'OFF'} @ {sched.hour:02d}:{sched.minute:02d} [{sched.days}]")
+    return [_to_response(s) for s in created]
 
 
 @router.get("/schedules", response_model=List[ScheduleResponse])

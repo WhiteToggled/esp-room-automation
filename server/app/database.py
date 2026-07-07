@@ -33,6 +33,19 @@ class StateLog(Base):
     snapshot = Column(Text, nullable=False)
 
 
+class RoomName(Base):
+    __tablename__ = "room_names"
+    room_id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+
+
+class DeviceGroup(Base):
+    __tablename__ = "device_groups"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    mqtt_topic = Column(String, unique=True, nullable=False)
+    device_ids = Column(String, nullable=False)  # comma-separated
+
+
 class Schedule(Base):
     __tablename__ = "schedules"
     id = Column(Integer, primary_key=True, autoincrement=True)

@@ -32,7 +32,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   highlighted: {
     borderColor: colors.accentGlow,
-    backgroundColor: 'rgba(255,122,0,0.07)',
+    backgroundColor: 'rgba(47,128,237,0.07)',
   },
   innerHighlight: {
     position: 'absolute',

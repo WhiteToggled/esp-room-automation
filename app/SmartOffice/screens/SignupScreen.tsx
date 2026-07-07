@@ -230,12 +230,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   glowTopLeft: {
     position: 'absolute', top: -60, left: -60,
     width: 220, height: 220, borderRadius: 110,
-    backgroundColor: 'rgba(255,122,0,0.08)',
+    backgroundColor: 'rgba(47,128,237,0.08)',
   },
   glowBottomRight: {
     position: 'absolute', bottom: -60, right: -80,
     width: 260, height: 260, borderRadius: 130,
-    backgroundColor: 'rgba(255,122,0,0.05)',
+    backgroundColor: 'rgba(47,128,237,0.05)',
   },
   backBtn: {
     width: 40, height: 40, borderRadius: 12,
@@ -247,8 +247,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   hero: { alignItems: 'center', marginBottom: SPACING.xl },
   logoCircle: {
     width: 64, height: 64, borderRadius: 32,
-    backgroundColor: 'rgba(255,122,0,0.12)',
-    borderWidth: 1, borderColor: 'rgba(255,122,0,0.3)',
+    backgroundColor: 'rgba(47,128,237,0.12)',
+    borderWidth: 1, borderColor: 'rgba(47,128,237,0.3)',
     alignItems: 'center', justifyContent: 'center',
     marginBottom: SPACING.md,
   },
@@ -278,8 +278,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   errorText: { color: '#FF4D4D', fontSize: 13, marginLeft: SPACING.xs },
   infoBanner: {
     flexDirection: 'row', alignItems: 'flex-start',
-    backgroundColor: 'rgba(255,122,0,0.08)',
-    borderWidth: 1, borderColor: 'rgba(255,122,0,0.2)',
+    backgroundColor: 'rgba(47,128,237,0.08)',
+    borderWidth: 1, borderColor: 'rgba(47,128,237,0.2)',
     borderRadius: RADIUS.md, padding: SPACING.sm,
     marginBottom: SPACING.lg,
   },

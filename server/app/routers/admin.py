@@ -1,7 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
-from ..auth import pwd_context, require_admin
-from ..schemas import UserCreate, UserRoomsUpdate
+from ..auth import get_current_user, pwd_context, require_admin
+from ..database import RoomName, get_db
+from ..schemas import RenameRoomRequest, UserCreate, UserRoomsUpdate
+from ..state import room_names
 from ..users_db import (
     get_persisted_user,
     list_all_users,
@@ -62,3 +65,35 @@ def delete_user(
         raise HTTPException(status_code=404, detail="User not found")
     remove_user(username)
     return {"message": f"User '{username}' deleted"}
+
+
+@router.get("/rooms")
+def list_rooms(current_user: dict = Depends(require_admin)):
+    return [{"room_id": rid, "name": name} for rid, name in sorted(room_names.items())]
+
+
+@router.put("/rooms/{room_id}")
+def rename_room(
+    room_id: str,
+    data: RenameRoomRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    name = data.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name cannot be empty")
+    if room_id not in room_names:
+        raise HTTPException(status_code=404, detail=f"Room '{room_id}' not found")
+    if current_user["role"] != "admin" and room_id not in (current_user.get("rooms") or []):
+        raise HTTPException(status_code=403, detail=f"Access denied: room '{room_id}' is not in your assigned rooms")
+
+    db_entry = db.query(RoomName).filter(RoomName.room_id == room_id).first()
+    if db_entry:
+        db_entry.name = name
+    else:
+        db.add(RoomName(room_id=room_id, name=name))
+    db.commit()
+    room_names[room_id] = name
+    return {"room_id": room_id, "name": name}
+
+
