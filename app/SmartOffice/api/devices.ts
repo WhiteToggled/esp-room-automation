@@ -19,8 +19,36 @@ export interface Schedule {
 export type ScheduleCreate = Omit<Schedule, 'id' | 'created_by' | 'created_at'>;
 export type ScheduleUpdate = Partial<Omit<Schedule, 'id' | 'device_id' | 'created_by' | 'created_at'>>;
 
-export async function getStates() {
-  return client.get('/states');
+// GET /states now returns device states plus a room-prefix → display-name map.
+// `names` only includes rooms the caller is allowed to see (all rooms for admin).
+export interface StatesResponse {
+  states: Record<string, number>;
+  names: Record<string, string>;
+}
+
+export async function getStates(): Promise<StatesResponse> {
+  const raw = await client.get('/states');
+  // New shape: { states, names }. Stay tolerant of the old flat-map shape.
+  if (raw && typeof raw === 'object' && 'states' in raw) {
+    return { states: raw.states ?? {}, names: raw.names ?? {} };
+  }
+  return { states: (raw ?? {}) as Record<string, number>, names: {} };
+}
+
+export interface Room {
+  room_id: string;
+  name: string;
+}
+
+// GET /rooms — admin only; every room with its current display name.
+export async function listRooms(): Promise<Room[]> {
+  return client.get('/rooms');
+}
+
+// PUT /rooms/{room_id} — rename a room. Admin can rename any room; a regular
+// user only their assigned rooms (backend returns 403 otherwise).
+export async function renameRoom(roomId: string, name: string): Promise<Room> {
+  return client.put(`/rooms/${encodeURIComponent(roomId)}`, { name });
 }
 
 export async function toggle(deviceId: string) {

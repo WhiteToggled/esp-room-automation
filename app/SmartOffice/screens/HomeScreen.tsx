@@ -6,6 +6,7 @@ import {
   StatusBar,
   Dimensions,
   PanResponder,
+  Alert,
 } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -269,7 +270,8 @@ const HomeScreen: React.FC = () => {
     devicesApi.getStates().then(reconcileStates).catch(() => {});
   }, [applyCabinUpdate, markPending]);
 
-  const reconcileStates = useCallback((states: Record<string, number>) => {
+  const reconcileStates = useCallback((data: devicesApi.StatesResponse) => {
+    const { states, names } = data;
     const pending = pendingRef.current;
     // For a device with a pending change, only accept the incoming value once it
     // matches what we expect (then release the lock); otherwise keep the optimistic
@@ -290,9 +292,30 @@ const HomeScreen: React.FC = () => {
     applyCabinUpdate((c) => {
       const lightOn = resolve(c.light.topic, c.light.isOn);
       const fanOn = resolve(c.fan.topic, c.fan.isOn);
-      if (lightOn === c.light.isOn && fanOn === c.fan.isOn) return c;
-      return { ...c, light: { ...c.light, isOn: lightOn }, fan: { ...c.fan, isOn: fanOn } };
+      // Server-provided room name wins; an unnamed room comes back as its own
+      // id (e.g. "r2"), in which case we keep the friendly default label.
+      const roomId = `r${c.number}`;
+      const serverName = names[roomId];
+      const nextName = serverName && serverName !== roomId ? serverName : c.name;
+      if (lightOn === c.light.isOn && fanOn === c.fan.isOn && nextName === c.name) return c;
+      return { ...c, name: nextName, light: { ...c.light, isOn: lightOn }, fan: { ...c.fan, isOn: fanOn } };
     });
+  }, [applyCabinUpdate]);
+
+  // Rename a cabin's room (admin). Applies optimistically and reverts on failure.
+  const renameCabin = useCallback(async (cabinId: string, rawName: string) => {
+    const cabin = cabinsRef.current.find((c) => c.id === cabinId);
+    const name = rawName.trim();
+    if (!cabin || !name || name === cabin.name) return;
+    const roomId = `r${cabin.number}`;
+    const previous = cabin.name;
+    applyCabinUpdate((c) => (c.id === cabinId ? { ...c, name } : c));
+    try {
+      await devicesApi.renameRoom(roomId, name);
+    } catch (_) {
+      applyCabinUpdate((c) => (c.id === cabinId ? { ...c, name: previous } : c));
+      Alert.alert('Rename failed', 'Could not rename this cabin. Please try again.');
+    }
   }, [applyCabinUpdate]);
 
   useEffect(() => {
@@ -301,7 +324,7 @@ const HomeScreen: React.FC = () => {
     const fetchAndReconcile = async () => {
       try {
         const states = await devicesApi.getStates();
-        if (mounted) reconcileStates(states as Record<string, number>);
+        if (mounted) reconcileStates(states);
       } catch (_) {
       } finally {
         if (mounted) setInitialLoading(false);
@@ -452,9 +475,11 @@ const HomeScreen: React.FC = () => {
 
       <ExpandedCabinModal
         cabin={expandedCabin}
+        canRename={isAdmin || !!user?.assignedCabinId}
         onClose={() => setExpandedCabinId(null)}
         onToggleLight={() => expandedCabin && toggleLight(expandedCabin.id)}
         onToggleFan={() => expandedCabin && toggleFan(expandedCabin.id)}
+        onRename={(name) => expandedCabin && renameCabin(expandedCabin.id, name)}
       />
     </View>
   );

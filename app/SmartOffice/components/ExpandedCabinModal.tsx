@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Animated } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Cabin } from '../constants/cabinData';
@@ -9,32 +9,52 @@ import ToggleSwitch from './ToggleSwitch';
 
 interface ExpandedCabinModalProps {
   cabin: Cabin | null;
+  canRename?: boolean;
   onClose: () => void;
   onToggleLight: () => void;
   onToggleFan: () => void;
+  onRename?: (name: string) => void;
 }
 
 const ExpandedCabinModal: React.FC<ExpandedCabinModalProps> = ({
   cabin,
+  canRename = false,
   onClose,
   onToggleLight,
   onToggleFan,
+  onRename,
 }) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const scale = useRef(new Animated.Value(0.85)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+
   useEffect(() => {
     if (cabin) {
       scale.setValue(0.85);
       opacity.setValue(0);
+      setEditing(false); // never reopen mid-edit for a different cabin
       Animated.parallel([
         Animated.spring(scale, { toValue: 1, useNativeDriver: true, damping: 16, stiffness: 220 }),
         Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
       ]).start();
     }
   }, [cabin?.id]);
+
+  const startEditing = () => {
+    if (!cabin) return;
+    setDraft(cabin.name);
+    setEditing(true);
+  };
+
+  const commitRename = () => {
+    const name = draft.trim();
+    if (name && name !== cabin?.name) onRename?.(name);
+    setEditing(false);
+  };
 
   const isAnyOn = !!cabin && (cabin.light.isOn || cabin.fan.isOn);
 
@@ -53,7 +73,37 @@ const ExpandedCabinModal: React.FC<ExpandedCabinModalProps> = ({
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.name}>{cabin.name}</Text>
+            {editing ? (
+              <View style={styles.nameEditRow}>
+                <TextInput
+                  style={styles.nameInput}
+                  value={draft}
+                  onChangeText={setDraft}
+                  placeholder="Cabin name"
+                  placeholderTextColor={colors.textMuted}
+                  autoFocus
+                  maxLength={40}
+                  returnKeyType="done"
+                  onSubmitEditing={commitRename}
+                  selectionColor={colors.accent}
+                />
+                <TouchableOpacity style={styles.nameSaveBtn} onPress={commitRename} activeOpacity={0.7}>
+                  <Ionicons name="checkmark" size={18} color="#fff" />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.nameCancelBtn} onPress={() => setEditing(false)} activeOpacity={0.7}>
+                  <Ionicons name="close" size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.nameRow}>
+                <Text style={styles.name} numberOfLines={1}>{cabin.name}</Text>
+                {canRename && (
+                  <TouchableOpacity style={styles.renameBtn} onPress={startEditing} activeOpacity={0.7}>
+                    <Ionicons name="pencil" size={14} color={colors.accent} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
             <View style={styles.statusRow}>
               <View style={[styles.statusDot, isAnyOn ? styles.statusDotOn : styles.statusDotOff]} />
               <Text style={styles.statusText}>{isAnyOn ? 'Active' : 'Idle'}</Text>
@@ -131,7 +181,28 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder,
     alignItems: 'center', justifyContent: 'center',
   },
-  name: { color: colors.text, fontSize: 22, fontWeight: '700', letterSpacing: -0.5 },
+  nameRow: { flexDirection: 'row', alignItems: 'center' },
+  name: { color: colors.text, fontSize: 22, fontWeight: '700', letterSpacing: -0.5, flexShrink: 1 },
+  renameBtn: {
+    width: 30, height: 30, borderRadius: 9, marginLeft: SPACING.sm,
+    backgroundColor: 'rgba(47,128,237,0.12)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  nameEditRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  nameInput: {
+    flex: 1, color: colors.text, fontSize: 20, fontWeight: '700',
+    backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.accent,
+    borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
+  },
+  nameSaveBtn: {
+    width: 40, height: 40, borderRadius: 11, backgroundColor: colors.accent,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  nameCancelBtn: {
+    width: 40, height: 40, borderRadius: 11,
+    backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder,
+    alignItems: 'center', justifyContent: 'center',
+  },
   statusRow: { flexDirection: 'row', alignItems: 'center', marginTop: SPACING.xs, marginBottom: SPACING.lg },
   statusDot: { width: 7, height: 7, borderRadius: 3.5, marginRight: 6 },
   statusDotOn: { backgroundColor: colors.accent },
