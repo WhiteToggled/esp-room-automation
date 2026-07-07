@@ -4,6 +4,9 @@ __pycache__/
 *.pyo
 *.db
 .env
+.env.*
+!.env.example
+*.log
 .git/
 .gitignore
 README.md

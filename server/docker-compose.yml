@@ -1,33 +1,57 @@
 services:
-  server:
-    build: .
-    ports:
-      - "8000:8000"
-    env_file:
-      - .env
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
     environment:
-      - MQTT_BROKER=mqtt-broker
-      - DATA_DIR=/data
-    depends_on:
-      - mqtt-broker
+      POSTGRES_DB: ${POSTGRES_DB:-automation}
+      POSTGRES_USER: ${POSTGRES_USER:-automation}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - app-data:/data
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-automation} -d ${POSTGRES_DB:-automation}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   mqtt-broker:
-    image: eclipse-mosquitto:latest
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
     ports:
-      - "1883:1883"
-      - "9001:9001"
-    env_file:
-      - .env
+      - "1883:1883"   # raw MQTT — for ESP devices on the local network
+      - "9001:9001"   # MQTT over WebSocket — expose via Cloudflare tunnel
+    environment:
+      MQTT_USER: ${MQTT_USER}
+      MQTT_PASSWORD: ${MQTT_PASSWORD}
     entrypoint: ["/mosquitto-entrypoint.sh"]
     volumes:
-      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - ./mosquitto-entrypoint.sh:/mosquitto-entrypoint.sh
       - mosquitto-data:/mosquitto/data
       - mosquitto-log:/mosquitto/log
 
+  server:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8000:8000"   # HTTP API — expose via Cloudflare tunnel
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-automation}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-automation}
+      MQTT_BROKER: mqtt-broker
+      MQTT_PORT: "1883"
+    depends_on:
+      db:
+        condition: service_healthy
+      mqtt-broker:
+        condition: service_started
+    volumes:
+      - firmware-data:/app/firmware
+
 volumes:
-  app-data:
+  db-data:
   mosquitto-data:
   mosquitto-log:
+  firmware-data:
