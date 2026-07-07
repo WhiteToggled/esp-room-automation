@@ -6,10 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ..auth import get_current_user, get_room_from_device
-from ..database import Device, StateLog, get_db
+from ..database import Device, DeviceState, StateLog, get_db
 from ..scheduler import log_device_states
 from ..schemas import LogBucket, StateLogEntry
-from ..state import device_states, group_to_devices, room_names
+from ..state import group_to_devices, room_names
 
 router = APIRouter(tags=["Monitoring"])
 
@@ -26,15 +26,16 @@ def get_all_states(
     current_user: dict = Depends(get_current_user),
 ):
     devices = db.query(Device).all()
+    db_states = {ds.device_id: ds.state for ds in db.query(DeviceState).all()}
     if current_user.get("role") == "admin":
-        states = {d.id: device_states.get(d.id, 0) for d in devices}
+        states = {d.id: db_states.get(d.id, 0) for d in devices}
         visible_rooms = {get_room_from_device(d.id) for d in devices}
     else:
         user_rooms = set(current_user.get("rooms") or [])
         if not user_rooms:
             return {"states": {}, "names": {}}
         states = {
-            d.id: device_states.get(d.id, 0)
+            d.id: db_states.get(d.id, 0)
             for d in devices
             if get_room_from_device(d.id) in user_rooms
         }

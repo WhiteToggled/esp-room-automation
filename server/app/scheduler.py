@@ -47,19 +47,20 @@ def run_scheduled_actions():
             allowed_days = {d.strip() for d in sched.days.split(",") if d.strip()}
             if current_day not in allowed_days:
                 continue
-            group_topic = device_to_group.get(sched.device_id)
-            if group_topic:
-                members = group_to_devices.get(group_topic, [sched.device_id])
-                mqtt_client.publish(group_topic, str(sched.action), qos=1, retain=True)
-                for member in members:
-                    device_states[member] = sched.action
-                    save_device_state(db, member, sched.action)
-                print(f"[scheduler] {sched.device_id} (group {group_topic}) = {'ON' if sched.action else 'OFF'} (schedule #{sched.id})")
-            else:
-                device_states[sched.device_id] = sched.action
-                mqtt_client.publish(sched.device_id, str(sched.action), qos=1, retain=True)
-                save_device_state(db, sched.device_id, sched.action)
-                print(f"[scheduler] {sched.device_id} = {'ON' if sched.action else 'OFF'} (schedule #{sched.id})")
+            for device_id in (d.strip() for d in sched.device_ids.split(",") if d.strip()):
+                group_topic = device_to_group.get(device_id)
+                if group_topic:
+                    members = group_to_devices.get(group_topic, [device_id])
+                    mqtt_client.publish(group_topic, str(sched.action), qos=1, retain=True)
+                    for member in members:
+                        device_states[member] = sched.action
+                        save_device_state(db, member, sched.action)
+                    print(f"[scheduler] {device_id} (group {group_topic}) = {'ON' if sched.action else 'OFF'} (schedule #{sched.id})")
+                else:
+                    device_states[device_id] = sched.action
+                    mqtt_client.publish(device_id, str(sched.action), qos=1, retain=True)
+                    save_device_state(db, device_id, sched.action)
+                    print(f"[scheduler] {device_id} = {'ON' if sched.action else 'OFF'} (schedule #{sched.id})")
     except Exception as e:
         print(f"Schedule runner error: {e}")
     finally:

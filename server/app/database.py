@@ -49,7 +49,7 @@ class DeviceGroup(Base):
 class Schedule(Base):
     __tablename__ = "schedules"
     id = Column(Integer, primary_key=True, autoincrement=True)
-    device_id = Column(String, nullable=False)
+    device_ids = Column("device_id", String, nullable=False)  # comma-separated
     action = Column(Integer, nullable=False)        # 0 = off, 1 = on
     hour = Column(Integer, nullable=False)          # 0–23
     minute = Column(Integer, nullable=False)        # 0–59

@@ -46,7 +46,7 @@ class RenameRoomRequest(BaseModel):
 
 class ScheduleResponse(BaseModel):
     id: int
-    device_id: str
+    device_ids: List[str]
     action: int
     hour: int
     minute: int

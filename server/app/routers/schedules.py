@@ -14,7 +14,7 @@ router = APIRouter(tags=["Schedules"])
 def _to_response(sched: Schedule) -> ScheduleResponse:
     return ScheduleResponse(
         id=sched.id,
-        device_id=sched.device_id,
+        device_ids=[d.strip() for d in sched.device_ids.split(",") if d.strip()],
         action=sched.action,
         hour=sched.hour,
         minute=sched.minute,
@@ -25,7 +25,14 @@ def _to_response(sched: Schedule) -> ScheduleResponse:
     )
 
 
-@router.post("/schedules", response_model=List[ScheduleResponse], status_code=201)
+def _schedule_rooms(sched: Schedule) -> set[str]:
+    return {
+        r for did in sched.device_ids.split(",")
+        if (r := get_room_from_device(did.strip()))
+    }
+
+
+@router.post("/schedules", response_model=ScheduleResponse, status_code=201)
 def create_schedule(
     schedule: ScheduleCreate,
     db: Session = Depends(get_db),
@@ -43,27 +50,20 @@ def create_schedule(
         if not db.query(Device).filter(Device.id == device_id).first():
             raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
 
-    days_str = ",".join(schedule.days)
-    created = []
-    for device_id in schedule.device_ids:
-        sched = Schedule(
-            device_id=device_id,
-            action=schedule.action,
-            hour=schedule.hour,
-            minute=schedule.minute,
-            days=days_str,
-            enabled=1 if schedule.enabled else 0,
-            created_by=current_user["username"],
-        )
-        db.add(sched)
-        db.flush()
-        created.append(sched)
-
+    sched = Schedule(
+        device_ids=",".join(schedule.device_ids),
+        action=schedule.action,
+        hour=schedule.hour,
+        minute=schedule.minute,
+        days=",".join(schedule.days),
+        enabled=1 if schedule.enabled else 0,
+        created_by=current_user["username"],
+    )
+    db.add(sched)
     db.commit()
-    for sched in created:
-        db.refresh(sched)
-        print(f"[{current_user['username']}] schedule #{sched.id} created: {sched.device_id} {'ON' if sched.action else 'OFF'} @ {sched.hour:02d}:{sched.minute:02d} [{sched.days}]")
-    return [_to_response(s) for s in created]
+    db.refresh(sched)
+    print(f"[{current_user['username']}] schedule #{sched.id} created: {sched.device_ids} {'ON' if sched.action else 'OFF'} @ {sched.hour:02d}:{sched.minute:02d} [{sched.days}]")
+    return _to_response(sched)
 
 
 @router.get("/schedules", response_model=List[ScheduleResponse])
@@ -79,7 +79,13 @@ def list_schedules(
             return []
         rows = (
             db.query(Schedule)
-            .filter(or_(*[Schedule.device_id.like(f"{r}/%") for r in user_rooms]))
+            .filter(or_(*[
+                or_(
+                    Schedule.device_ids.like(f"{r}/%"),
+                    Schedule.device_ids.like(f"%,{r}/%"),
+                )
+                for r in user_rooms
+            ]))
             .order_by(Schedule.id)
             .all()
         )
@@ -95,8 +101,7 @@ def get_schedule(
     sched = db.query(Schedule).filter(Schedule.id == schedule_id).first()
     if not sched:
         raise HTTPException(status_code=404, detail="Schedule not found")
-    room = get_room_from_device(sched.device_id)
-    if room and not can_access_room(current_user, room):
+    if not all(can_access_room(current_user, r) for r in _schedule_rooms(sched)):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
     return _to_response(sched)
 
@@ -111,8 +116,7 @@ def update_schedule(
     sched = db.query(Schedule).filter(Schedule.id == schedule_id).first()
     if not sched:
         raise HTTPException(status_code=404, detail="Schedule not found")
-    room = get_room_from_device(sched.device_id)
-    if room and not can_access_room(current_user, room):
+    if not all(can_access_room(current_user, r) for r in _schedule_rooms(sched)):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     if update.action is not None:
@@ -140,10 +144,9 @@ def delete_schedule(
     sched = db.query(Schedule).filter(Schedule.id == schedule_id).first()
     if not sched:
         raise HTTPException(status_code=404, detail="Schedule not found")
-    room = get_room_from_device(sched.device_id)
-    if room and not can_access_room(current_user, room):
+    if not all(can_access_room(current_user, r) for r in _schedule_rooms(sched)):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
     db.delete(sched)
     db.commit()
-    print(f"[{current_user['username']}] schedule #{schedule_id} deleted ({sched.device_id})")
+    print(f"[{current_user['username']}] schedule #{schedule_id} deleted ({sched.device_ids})")
     return {"message": f"Schedule {schedule_id} deleted"}

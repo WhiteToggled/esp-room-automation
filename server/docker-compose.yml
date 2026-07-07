@@ -30,14 +30,18 @@ services:
       - mosquitto-data:/mosquitto/data
       - mosquitto-log:/mosquitto/log
 
-  cloudflared:
+  cloudflared-api:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
-    command: tunnel run
-    environment:
-      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    command: tunnel --no-autoupdate --url http://server:8000
     depends_on:
       - server
+
+  cloudflared-mqtt:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://mqtt-broker:9001
+    depends_on:
       - mqtt-broker
 
   server:
@@ -52,6 +56,7 @@ services:
       MQTT_BROKER: mqtt-broker
       MQTT_PORT: "9001"
       MQTT_TRANSPORT: websockets
+      TZ: Asia/Karachi
     depends_on:
       db:
         condition: service_healthy
