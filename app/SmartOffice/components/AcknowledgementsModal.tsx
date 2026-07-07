@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, StatusBar, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, StatusBar, Image, Linking } from 'react-native';
 import { EdgeInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -101,6 +101,16 @@ const AcknowledgementsModal: React.FC<AcknowledgementsModalProps> = ({ visible, 
                       <Text style={styles.contributorName}>{c.name}</Text>
                       <Text style={styles.contributorRole}>{c.role}</Text>
                     </View>
+                    {!!c.linkedin && (
+                      <TouchableOpacity
+                        style={styles.linkedinBtn}
+                        activeOpacity={0.6}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        onPress={() => Linking.openURL(c.linkedin!).catch(() => {})}
+                      >
+                        <Ionicons name="logo-linkedin" size={18} color="#0A66C2" />
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </FadeInView>
               ))}
@@ -184,6 +194,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   contributorInfo: { flex: 1 },
   contributorName: { color: colors.text, fontSize: 15, fontWeight: '600' },
   contributorRole: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
+  linkedinBtn: {
+    width: 34, height: 34, borderRadius: RADIUS.sm,
+    backgroundColor: 'rgba(10,102,194,0.1)', borderWidth: 1, borderColor: 'rgba(10,102,194,0.3)',
+    alignItems: 'center', justifyContent: 'center', marginLeft: SPACING.sm,
+  },
 
   supervisorRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
