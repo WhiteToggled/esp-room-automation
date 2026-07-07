@@ -5,13 +5,30 @@
 #define RESET_HOLD_TIME 5000
 
 #define N_DEVICES 6
+#define DEBOUNCE_DELAY 250
 
-inline const int RELAY_PINS[N_DEVICES] = {14, 27, 26, 25, 33, 32};
-inline const int SWITCH_PINS[N_DEVICES] = {23, 22, 21, 19, 18, 5};
+#define DEVICE_1
+#ifdef DEVICE_1
+#define FIRMWARE_UPDATE_TOPIC "nestboard/firmware/update/1"
+
+inline const int RELAY_PINS[N_DEVICES] = {27, 25, 14, 32, 33, 26};
+inline const int SWITCH_PINS[N_DEVICES] = {23, 22, 21, 18, 5, 17};
 inline const char *MQTT_TOPICS[N_DEVICES] = {
   "r1/l1", "r1/f1",
   "r2/l1", "r2/f1",
   "r3/l1", "r3/f1",
 };
+#elif defined(DEVICE_2)
+#define FIRMWARE_UPDATE_TOPIC "nestboard/firmware/update/2"
 
-#define DEBOUNCE_DELAY 250
+inline const int RELAY_PINS[N_DEVICES] = {25, 27, 32, 14, 33, 14};
+inline const int SWITCH_PINS[N_DEVICES] = {23, 22, 21, 18, 5, 17};
+inline const char *MQTT_TOPICS[N_DEVICES] = {
+  "r4/l1", "r4/f1",
+  "r5/l1", "r5/f1",
+  "r6/l1", "r6/f1",
+};
+#endif
+
+// inline const int RELAY_PINS[N_DEVICES] = {14, 27, 26, 25, 33, 32};
+// inline const int SWITCH_PINS[N_DEVICES] = {23, 22, 21, 18, 5, 17};
