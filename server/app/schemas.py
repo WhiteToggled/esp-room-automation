@@ -58,12 +58,19 @@ class ScheduleResponse(BaseModel):
 
 
 class ScheduleCreate(BaseModel):
-    device_id: str
+    device_ids: List[str]
     action: int
     hour: int
     minute: int
     days: List[str]
     enabled: bool = True
+
+    @field_validator("device_ids")
+    @classmethod
+    def device_ids_nonempty(cls, v):
+        if not v:
+            raise ValueError("device_ids must contain at least one device")
+        return v
 
     @field_validator("action")
     @classmethod
