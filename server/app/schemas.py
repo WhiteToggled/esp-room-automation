@@ -43,26 +43,6 @@ class RenameRoomRequest(BaseModel):
     name: str
 
 
-class DeviceGroupCreate(BaseModel):
-    mqtt_topic: str
-    device_ids: List[str]
-
-    @field_validator("device_ids")
-    @classmethod
-    def at_least_two(cls, v):
-        if len(v) < 2:
-            raise ValueError("A group must have at least 2 devices")
-        return v
-
-
-class DeviceGroupResponse(BaseModel):
-    id: int
-    mqtt_topic: str
-    device_ids: List[str]
-
-    class Config:
-        from_attributes = True
-
 
 class ScheduleResponse(BaseModel):
     id: int

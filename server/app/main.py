@@ -3,8 +3,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .config import CORS_ORIGINS, LOG_INTERVAL_MINUTES
-from .database import Device, DeviceGroup, DeviceState, RoomName, SessionLocal
+from .config import CORS_ORIGINS, DEVICE_TOPIC_MAP, LOG_INTERVAL_MINUTES
+from .database import Device, DeviceState, RoomName, SessionLocal
 from .state import device_states, device_to_group, group_to_devices, room_names
 from .mqtt import mqtt_client
 from .routers import admin, auth, control, monitoring, ota, schedules
@@ -12,27 +12,12 @@ from .scheduler import scheduler
 from .users_db import init_users_db
 from .auth import get_room_from_device
 
-INITIAL_DEVICES = [
-    "r1/l1",
-    "r2/l1",
-    "r3/l1",
-    "r4/l1",
-    "r5/l1",
-    "r6/l1",
-    "r1/f1",
-    "r2/f1",
-    "r3/f1",
-    "r4/f1",
-    "r5/f1",
-    "r6/f1",
-]
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    desired = set(DEVICE_TOPIC_MAP.keys())
+
     db = SessionLocal()
     try:
-        desired = set(INITIAL_DEVICES)
         existing = {d.id for d in db.query(Device).all()}
         for name in desired - existing:
             db.add(Device(id=name))
@@ -50,14 +35,13 @@ async def lifespan(app: FastAPI):
         db.commit()
         for rn in db.query(RoomName).all():
             room_names[rn.room_id] = rn.name
-
-        for g in db.query(DeviceGroup).all():
-            members = [d.strip() for d in g.device_ids.split(",") if d.strip()]
-            group_to_devices[g.mqtt_topic] = members
-            for member in members:
-                device_to_group[member] = g.mqtt_topic
     finally:
         db.close()
+
+    for device_id, mqtt_topic in DEVICE_TOPIC_MAP.items():
+        if mqtt_topic != device_id:
+            device_to_group[device_id] = mqtt_topic
+            group_to_devices.setdefault(mqtt_topic, []).append(device_id)
 
     init_users_db()
     scheduler.start()
