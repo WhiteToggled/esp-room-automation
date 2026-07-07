@@ -22,7 +22,7 @@ void sync_server();
 void setup() {
     Serial.begin(115200);
 
-    Serial.println("Boo im an updated firmware");
+    Serial.println("Boo im an updated firmware!!!");
 
     pinMode(STATUS_LED, OUTPUT);
     digitalWrite(STATUS_LED, HIGH);
@@ -87,10 +87,6 @@ emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
 
 void loop() {
     wm.process();
-    // Serial.println(digitalRead(RELAY_PINS[7]));
-    // if (digitalRead(RELAY_PINS[7]) == LOW) {
-    //     Serial.println("hi");
-    // }
     check_reset();
     detect_switchboard();
     if (WiFi.status() != WL_CONNECTED) {
@@ -98,6 +94,7 @@ void loop() {
     } else if (!client.connected()) {
         mqtt_reconnect();
     } else {
+        digitalWrite(STATUS_LED, LOW);
         client.loop();
     }
 
@@ -144,10 +141,12 @@ void sync_server() {
         if (mqtt_pending_updates[i]) {
             mqtt_pending_updates[i] = false;
 
-            const char *payload =
-                (digitalRead(RELAY_PINS[i]) == LOW) ? "1" : "0";
-            client.publish(MQTT_TOPICS[i], payload);
-            Serial.printf("MQTT Publish: [%s] %s\n", MQTT_TOPICS[i], payload);
+            const char *state = (digitalRead(RELAY_PINS[i]) == LOW) ? "1" : "0";
+            char payload[32];
+            snprintf(payload, sizeof(payload), "%s=%s", MQTT_TOPICS[i], state);
+            client.publish(SYNC_SERVER_TOPIC, payload);
+            Serial.printf("MQTT Publish: [%s] %s\n", SYNC_SERVER_TOPIC,
+                          payload);
         }
     }
 }
