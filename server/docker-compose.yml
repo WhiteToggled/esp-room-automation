@@ -9,7 +9,11 @@ services:
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-automation} -d ${POSTGRES_DB:-automation}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-automation} -d ${POSTGRES_DB:-automation}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -19,7 +23,7 @@ services:
     image: eclipse-mosquitto:2
     restart: unless-stopped
     ports:
-      - "9001:9001"   # MQTT over WebSocket — expose via Cloudflare tunnel
+      - "9001:9001" # MQTT over WebSocket — expose via Cloudflare tunnel
     environment:
       MQTT_USER: ${MQTT_USER}
       MQTT_PASSWORD: ${MQTT_PASSWORD}
@@ -30,25 +34,11 @@ services:
       - mosquitto-data:/mosquitto/data
       - mosquitto-log:/mosquitto/log
 
-  cloudflared-api:
-    image: cloudflare/cloudflared:latest
-    restart: unless-stopped
-    command: tunnel --no-autoupdate --url http://server:8000
-    depends_on:
-      - server
-
-  cloudflared-mqtt:
-    image: cloudflare/cloudflared:latest
-    restart: unless-stopped
-    command: tunnel --no-autoupdate --url http://mqtt-broker:9001
-    depends_on:
-      - mqtt-broker
-
   server:
     build: .
     restart: unless-stopped
     ports:
-      - "8000:8000"   # HTTP API — expose via Cloudflare tunnel
+      - "8000:8000"
     env_file:
       - .env
     environment:
