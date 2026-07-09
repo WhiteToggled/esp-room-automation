@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Animated } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Animated, Vibration } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { SPACING, RADIUS, ThemeColors } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { lightsOn, fansOn, allOff as apiAllOff } from '../api/devices';
@@ -78,6 +79,10 @@ const MasterButton: React.FC<MasterButtonProps> = ({
   // ── Hold-to-confirm (destructive buttons) ────────────────────────────────
   const startHold = useCallback(() => {
     if (status !== 'idle') return;
+    // Short buzz the instant the hold begins, so the press registers immediately.
+    // Vibration drives the motor directly (reliable); haptics adds the iOS Taptic feel.
+    Vibration.vibrate(30);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     progress.setValue(0);
     const anim = Animated.timing(progress, {
       toValue: 1, duration: holdMs, useNativeDriver: false,
@@ -86,6 +91,9 @@ const MasterButton: React.FC<MasterButtonProps> = ({
     anim.start(({ finished }) => {
       if (finished) {
         progress.setValue(0);
+        // Strong buzz the moment the destructive action confirms.
+        Vibration.vibrate(400);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
         runAction();
       }
     });

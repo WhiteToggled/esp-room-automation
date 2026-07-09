@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient, { setUnauthorizedHandler } from '../api/client';
-import { TOKEN_KEY } from '../constants/apiConfig';
+import { getBaseUrlSync, TOKEN_KEY } from '../constants/apiConfig';
 
 export interface AppUser {
   id: string;
@@ -20,7 +20,7 @@ const roomsToCabinIds = (rooms: string[]): string[] =>
 interface AuthContextValue {
   user: AppUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   signup: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
 }
@@ -40,7 +40,7 @@ const TOKEN_STORAGE_KEY = TOKEN_KEY;
 const AuthContext = createContext<AuthContextValue>({
   user: null,
   loading: true,
-  login: async () => false,
+  login: async () => ({ success: false }),
   logout: async () => {},
   signup: async () => ({ success: false }),
 });
@@ -91,7 +91,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => setUnauthorizedHandler(null);
   }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (
+    email: string,
+    password: string
+  ): Promise<{ success: boolean; error?: string }> => {
     // Attempt backend login. Use the email local-part as username.
     const username = email.includes('@') ? email.split('@')[0] : email;
     try {
@@ -110,9 +113,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         assignedCabinIds: roomsToCabinIds(rooms),
       };
       setUser(userObj);
-      return true;
-    } catch (e) {
-      return false;
+      return { success: true };
+    } catch (e: any) {
+      // A thrown Response means the server actually replied with a non-2xx status.
+      if (e instanceof Response) {
+        if (e.status === 401) {
+          return { success: false, error: 'Invalid username or password.' };
+        }
+        let detail = '';
+        try {
+          const json = await e.json();
+          detail = json.detail || '';
+        } catch (_) {
+          // response body wasn't JSON
+        }
+        return { success: false, error: detail || `Server error (${e.status}).` };
+      }
+      // Otherwise fetch itself rejected — network is unreachable, DNS/SSL/certificate
+      // failure, or the tunnel URL is down. Surface the real cause instead of hiding it.
+      return {
+        success: false,
+        error: `Cannot reach server (${getBaseUrlSync()}): ${e?.message || 'network/SSL error'}`,
+      };
     }
   };
 

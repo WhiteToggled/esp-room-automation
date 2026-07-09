@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BASE_URL, TOKEN_KEY } from '../constants/apiConfig';
+import { getBaseUrl, TOKEN_KEY } from '../constants/apiConfig';
 
 // Registered by AuthContext. Invoked whenever an authenticated request comes back
 // 401 (expired/invalid token) so the app can force a logout mid-session.
@@ -24,7 +24,7 @@ async function handle(res: Response, hadToken: boolean) {
 
 async function get(path: string) {
   const token = await getToken();
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await fetch(`${await getBaseUrl()}${path}`, {
     method: 'GET',
     headers: {
       'Accept': 'application/json',
@@ -36,7 +36,7 @@ async function get(path: string) {
 
 async function post(path: string, body: any) {
   const token = await getToken();
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await fetch(`${await getBaseUrl()}${path}`, {
     method: 'POST',
     headers: {
       'Accept': 'application/json',
@@ -50,7 +50,7 @@ async function post(path: string, body: any) {
 
 async function del(path: string) {
   const token = await getToken();
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await fetch(`${await getBaseUrl()}${path}`, {
     method: 'DELETE',
     headers: {
       'Accept': 'application/json',
@@ -62,7 +62,7 @@ async function del(path: string) {
 
 async function put(path: string, body: any) {
   const token = await getToken();
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await fetch(`${await getBaseUrl()}${path}`, {
     method: 'PUT',
     headers: {
       'Accept': 'application/json',
@@ -79,7 +79,7 @@ async function postForm(path: string, form: Record<string, string>) {
   const body = Object.keys(form)
     .map((k) => encodeURIComponent(k) + '=' + encodeURIComponent(form[k]))
     .join('&');
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await fetch(`${await getBaseUrl()}${path}`, {
     method: 'POST',
     headers: {
       'Accept': 'application/json',

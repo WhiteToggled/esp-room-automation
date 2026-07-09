@@ -17,10 +17,23 @@ import { useAuth } from '../context/AuthContext';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
+// Fallback device set (rooms 1–6, matching the deployed hardware) used only until
+// the real list is fetched from the backend's /states endpoint.
 const ALL_DEVICES = [
-  ...Array.from({ length: 8 }, (_, i) => `r${i + 1}/l1`),
-  ...Array.from({ length: 8 }, (_, i) => `r${i + 1}/f1`),
+  ...Array.from({ length: 6 }, (_, i) => `r${i + 1}/l1`),
+  ...Array.from({ length: 6 }, (_, i) => `r${i + 1}/f1`),
 ];
+
+// Order device ids by room number, then lights before fans.
+const sortDeviceIds = (ids: string[]): string[] =>
+  [...ids].sort((a, b) => {
+    const [ra, da] = a.split('/');
+    const [rb, db] = b.split('/');
+    const na = parseInt(ra.replace('r', ''), 10) || 0;
+    const nb = parseInt(rb.replace('r', ''), 10) || 0;
+    if (na !== nb) return na - nb;
+    return (da || '').localeCompare(db || '');
+  });
 
 const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 const DAYS_LABEL = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -40,6 +53,37 @@ const formatDevice = (id: string) => {
   const [room, dev] = id.split('/');
   const num = room?.replace('r', '') ?? '?';
   return `Room ${num} · ${dev?.startsWith('l') ? 'Light' : 'Fan'}`;
+};
+
+// One-line summary for a schedule that may target several devices.
+const summarizeDevices = (ids: string[]) =>
+  ids.length === 0 ? 'No devices'
+  : ids.length === 1 ? formatDevice(ids[0])
+  : `${ids.length} devices`;
+
+// Icon to represent a device set: bulb if all lights, fan if all fans, grid if mixed.
+const deviceSetIcon = (ids: string[]): keyof typeof Ionicons.glyphMap => {
+  const allLight = ids.length > 0 && ids.every((id) => id.includes('/l'));
+  const allFan = ids.length > 0 && ids.every((id) => !id.includes('/l'));
+  return allLight ? 'bulb-outline' : allFan ? 'sync-outline' : 'grid-outline';
+};
+
+// Pull a human-readable message out of a thrown error. The API client throws the
+// raw fetch Response on non-2xx, so read its JSON `detail`; otherwise fall back.
+const describeError = async (e: unknown, fallback: string): Promise<string> => {
+  if (e instanceof Response) {
+    try {
+      const json = await e.json();
+      const detail = json?.detail;
+      if (typeof detail === 'string') return detail;
+      // FastAPI validation errors come back as an array of { msg, loc }.
+      if (Array.isArray(detail)) {
+        return detail.map((d: any) => d?.msg ?? JSON.stringify(d)).join('\n') || fallback;
+      }
+    } catch (_) {}
+    return `${fallback} (HTTP ${e.status})`;
+  }
+  return fallback;
 };
 
 const formatTime = (h: number, m: number) => {
@@ -92,6 +136,13 @@ const ScheduleFormModal: React.FC<ScheduleFormProps> = ({
         : [...f.device_ids, id],
     }));
 
+  const allDevicesSelected =
+    availableDevices.length > 0 && availableDevices.every((id) => form.device_ids.includes(id));
+
+  // Select every available device, or clear the selection if all are already picked.
+  const toggleAllDevices = () =>
+    setForm((f) => ({ ...f, device_ids: allDevicesSelected ? [] : [...availableDevices] }));
+
   const handleSave = async () => {
     if (!isEditing && form.device_ids.length === 0) { Alert.alert('Validation', 'Select at least one device.'); return; }
     if (!form.days.length) { Alert.alert('Validation', 'Select at least one day.'); return; }
@@ -100,8 +151,7 @@ const ScheduleFormModal: React.FC<ScheduleFormProps> = ({
     setSaving(false);
   };
 
-  const editDevice = form.device_ids[0] ?? '';
-  const editIsLight = editDevice.includes('/l');
+  const editAllLight = form.device_ids.length > 0 && form.device_ids.every((id) => id.includes('/l'));
   const deviceSummary =
     form.device_ids.length === 0 ? 'Select devices'
     : form.device_ids.length === 1 ? formatDevice(form.device_ids[0])
@@ -136,18 +186,22 @@ const ScheduleFormModal: React.FC<ScheduleFormProps> = ({
             {/* ── Device(s) ── */}
             <Text style={fm.label}>{isEditing ? 'DEVICE' : 'DEVICES'}</Text>
             {isEditing ? (
-              // A schedule's device can't be reassigned — show it read-only.
+              // A schedule's devices can't be reassigned — show them read-only.
               <View style={fm.deviceField}>
-                <View style={[fm.deviceIcon, editIsLight ? fm.iconLight : fm.iconFan]}>
+                <View style={[fm.deviceIcon, editAllLight ? fm.iconLight : fm.iconFan]}>
                   <Ionicons
-                    name={editIsLight ? 'bulb-outline' : 'sync-outline'}
+                    name={deviceSetIcon(form.device_ids)}
                     size={16}
-                    color={editIsLight ? colors.accent : colors.blue}
+                    color={editAllLight ? colors.accent : colors.blue}
                   />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={fm.deviceName}>{formatDevice(editDevice)}</Text>
-                  <Text style={fm.deviceSub}>Device can’t be changed</Text>
+                  <Text style={fm.deviceName}>{summarizeDevices(form.device_ids)}</Text>
+                  <Text style={fm.deviceSub}>
+                    {form.device_ids.length > 1
+                      ? form.device_ids.map(formatDevice).join(', ')
+                      : 'Device can’t be changed'}
+                  </Text>
                 </View>
               </View>
             ) : (
@@ -174,6 +228,21 @@ const ScheduleFormModal: React.FC<ScheduleFormProps> = ({
                 {/* Inline multi-select device list */}
                 {deviceExpanded && (
                   <View style={fm.deviceList}>
+                    {/* Select all / Deselect all */}
+                    <TouchableOpacity
+                      style={fm.selectAllRow}
+                      onPress={toggleAllDevices}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={fm.selectAllText}>
+                        {allDevicesSelected ? 'Deselect all' : 'Select all'}
+                      </Text>
+                      <Ionicons
+                        name={allDevicesSelected ? 'checkbox' : 'square-outline'}
+                        size={20}
+                        color={allDevicesSelected ? colors.accent : colors.textMuted}
+                      />
+                    </TouchableOpacity>
                     {availableDevices.map((id) => {
                       const active = form.device_ids.includes(id);
                       const light = id.includes('/l');
@@ -366,6 +435,13 @@ const createFmStyles = (colors: ThemeColors) => StyleSheet.create({
     borderBottomLeftRadius: RADIUS.md, borderBottomRightRadius: RADIUS.md,
     paddingVertical: SPACING.xs, marginBottom: SPACING.sm,
   },
+  selectAllRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
+    marginHorizontal: SPACING.xs, marginBottom: SPACING.xs,
+    borderBottomWidth: 1, borderBottomColor: colors.glassBorder,
+  },
+  selectAllText: { color: colors.accent, fontSize: 13, fontWeight: '700' },
   deviceOption: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
@@ -420,7 +496,7 @@ interface ScheduleCardProps {
 const ScheduleCard: React.FC<ScheduleCardProps> = ({ schedule, index, onEdit, onDelete, onToggleEnabled }) => {
   const { colors } = useTheme();
   const sc = useMemo(() => createScStyles(colors), [colors]);
-  const isLight = schedule.device_id.includes('/l');
+  const isLight = schedule.device_ids.every((id) => id.includes('/l'));
   const isOn = schedule.action === 1;
 
   return (
@@ -444,16 +520,16 @@ const ScheduleCard: React.FC<ScheduleCardProps> = ({ schedule, index, onEdit, on
         />
       </View>
 
-      {/* Row 2: device */}
+      {/* Row 2: device(s) */}
       <View style={sc.deviceRow}>
         <View style={[sc.deviceDot, isLight ? sc.dotLight : sc.dotFan]}>
           <Ionicons
-            name={isLight ? 'bulb-outline' : 'sync-outline'}
+            name={deviceSetIcon(schedule.device_ids)}
             size={11}
             color={isLight ? colors.accent : colors.blue}
           />
         </View>
-        <Text style={sc.deviceText}>{formatDevice(schedule.device_id)}</Text>
+        <Text style={sc.deviceText}>{summarizeDevices(schedule.device_ids)}</Text>
       </View>
 
       {/* Row 3: day chips */}
@@ -537,17 +613,20 @@ const SchedulesScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [formVisible, setFormVisible] = useState(false);
   const [editTarget, setEditTarget] = useState<Schedule | null>(null);
+  // The real devices the backend knows about. Sourced from /states so the picker
+  // never offers a device that doesn't exist (which would fail schedule creation).
+  const [knownDevices, setKnownDevices] = useState<string[]>(ALL_DEVICES);
 
   const assignedCabinIds = user?.assignedCabinIds ?? [];
   const availableDevices = useMemo(() => {
-    if (isAdmin) return ALL_DEVICES;
+    if (isAdmin) return knownDevices;
     const rooms = assignedCabinIds.map((id) => `r${id.replace('cabin-', '')}`);
-    return ALL_DEVICES.filter((d) => rooms.some((r) => d.startsWith(`${r}/`)));
-  }, [isAdmin, assignedCabinIds.join(',')]);
+    return knownDevices.filter((d) => rooms.some((r) => d.startsWith(`${r}/`)));
+  }, [isAdmin, knownDevices, assignedCabinIds.join(',')]);
 
-  // Non-admin users only see schedules for their own cabin
+  // Non-admin users only see schedules that touch at least one of their devices.
   const visibleSchedules = useMemo(
-    () => isAdmin ? schedules : schedules.filter((s) => availableDevices.includes(s.device_id)),
+    () => isAdmin ? schedules : schedules.filter((s) => s.device_ids.some((id) => availableDevices.includes(id))),
     [schedules, isAdmin, availableDevices]
   );
 
@@ -555,6 +634,13 @@ const SchedulesScreen: React.FC = () => {
     try {
       const data = await api.listSchedules();
       setSchedules(data);
+    } catch (_) {}
+    // Refresh the real device set from the backend. Keys of /states are the
+    // actual device ids (e.g. "r1/l1"); only these can be scheduled.
+    try {
+      const { states } = await api.getStates();
+      const ids = Object.keys(states).filter((k) => k.includes('/l') || k.includes('/f'));
+      if (ids.length) setKnownDevices(sortDeviceIds(ids));
     } catch (_) {}
     setLoading(false);
   }, []);
@@ -577,14 +663,14 @@ const SchedulesScreen: React.FC = () => {
         });
         setSchedules((prev) => prev.map((s) => (s.id === editId ? updated : s)));
       } else {
-        // One schedule is created per selected device — append them all.
+        // The server creates a single schedule (returned as a one-item array).
         const created = await api.createSchedule(form);
         setSchedules((prev) => [...prev, ...created]);
       }
       setFormVisible(false);
       setEditTarget(null);
-    } catch (_) {
-      Alert.alert('Error', 'Could not save schedule. Please try again.');
+    } catch (e) {
+      Alert.alert('Error', await describeError(e, 'Could not save schedule. Please try again.'));
     }
   };
 
@@ -618,7 +704,7 @@ const SchedulesScreen: React.FC = () => {
   const openEdit   = (s: Schedule) => { setEditTarget(s); setFormVisible(true); };
 
   const formInitial: ScheduleCreate = editTarget
-    ? { device_ids: [editTarget.device_id], action: editTarget.action, hour: editTarget.hour, minute: editTarget.minute, days: [...editTarget.days], enabled: editTarget.enabled }
+    ? { device_ids: [...editTarget.device_ids], action: editTarget.action, hour: editTarget.hour, minute: editTarget.minute, days: [...editTarget.days], enabled: editTarget.enabled }
     : { ...DEFAULT_FORM, device_ids: [availableDevices[0] ?? ALL_DEVICES[0]] };
 
   return (

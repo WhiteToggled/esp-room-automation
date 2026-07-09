@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import { SPACING, RADIUS, ThemeColors } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import FadeInView from '../components/FadeInView';
+import { getBaseUrl, setBaseUrl } from '../constants/apiConfig';
 
 const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -25,9 +26,27 @@ const LoginScreen: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Runtime-configurable server URL
+  const [showServerConfig, setShowServerConfig] = useState(false);
+  const [serverUrl, setServerUrl] = useState('');
+  const [urlSaved, setUrlSaved] = useState(false);
+
   const { login } = useAuth();
   const { colors, theme } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+
+  // Load the currently active server URL into the editable field.
+  useEffect(() => {
+    getBaseUrl().then(setServerUrl).catch(() => {});
+  }, []);
+
+  const handleSaveUrl = async () => {
+    const normalized = await setBaseUrl(serverUrl);
+    setServerUrl(normalized);
+    setError('');
+    setUrlSaved(true);
+    setTimeout(() => setUrlSaved(false), 2000);
+  };
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -36,10 +55,10 @@ const LoginScreen: React.FC = () => {
     }
     setError('');
     setLoading(true);
-    const success = await login(email.trim(), password);
+    const result = await login(email.trim(), password);
     setLoading(false);
-    if (!success) {
-      setError('Invalid username or password.');
+    if (!result.success) {
+      setError(result.error || 'Invalid username or password.');
     }
     // Navigation handled by _layout NavigationGuard on user state change
   };
@@ -146,6 +165,50 @@ const LoginScreen: React.FC = () => {
               </TouchableOpacity>
 
               <Text style={styles.adminHint}>Contact your admin for account access.</Text>
+
+              {/* Server URL config */}
+              <TouchableOpacity
+                style={styles.serverToggle}
+                onPress={() => setShowServerConfig((v) => !v)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="server-outline" size={14} color={colors.textMuted} />
+                <Text style={styles.serverToggleText}>Server settings</Text>
+                <Ionicons
+                  name={showServerConfig ? 'chevron-up' : 'chevron-down'}
+                  size={14}
+                  color={colors.textMuted}
+                />
+              </TouchableOpacity>
+
+              {showServerConfig && (
+                <View style={styles.serverConfig}>
+                  <Text style={styles.label}>Server URL</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="link-outline" size={18} color={colors.textMuted} style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="https://example.com or 192.168.0.127:8000"
+                      placeholderTextColor={colors.textMuted}
+                      value={serverUrl}
+                      onChangeText={setServerUrl}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      keyboardType="url"
+                      returnKeyType="done"
+                      onSubmitEditing={handleSaveUrl}
+                    />
+                  </View>
+                  <TouchableOpacity style={styles.saveUrlBtn} onPress={handleSaveUrl} activeOpacity={0.8}>
+                    <Ionicons
+                      name={urlSaved ? 'checkmark-circle' : 'save-outline'}
+                      size={16}
+                      color={colors.accent}
+                    />
+                    <Text style={styles.saveUrlText}>{urlSaved ? 'Saved' : 'Save & use'}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
             </FadeInView>
           </ScrollView>
@@ -219,6 +282,27 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   adminHint: {
     color: colors.textMuted, fontSize: 11,
     textAlign: 'center', marginTop: SPACING.lg,
+  },
+  serverToggle: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    marginTop: SPACING.lg, paddingVertical: SPACING.xs,
+  },
+  serverToggleText: {
+    color: colors.textMuted, fontSize: 12, fontWeight: '500',
+    marginHorizontal: SPACING.xs,
+  },
+  serverConfig: {
+    marginTop: SPACING.sm,
+    paddingTop: SPACING.md,
+    borderTopWidth: 1, borderTopColor: colors.glassBorder,
+  },
+  saveUrlBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    marginTop: SPACING.sm, paddingVertical: SPACING.sm,
+  },
+  saveUrlText: {
+    color: colors.accent, fontSize: 14, fontWeight: '600',
+    marginLeft: SPACING.xs,
   },
 });
 
