@@ -23,7 +23,7 @@ services:
     image: eclipse-mosquitto:2
     restart: unless-stopped
     ports:
-      - "9001:9001" # MQTT over WebSocket — expose via Cloudflare tunnel
+      - "9001:9001" # MQTT over WebSocket — LAN only, not tunneled
     environment:
       MQTT_USER: ${MQTT_USER}
       MQTT_PASSWORD: ${MQTT_PASSWORD}
@@ -34,11 +34,18 @@ services:
       - mosquitto-data:/mosquitto/data
       - mosquitto-log:/mosquitto/log
 
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - server
+
   server:
     build: .
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "8000:8000" # HTTP API — also exposed via Cloudflare tunnel
     env_file:
       - .env
     environment:
