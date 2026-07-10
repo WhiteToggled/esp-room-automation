@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Fallback used the first time the app runs (before the user overrides it) and
 // whenever the saved value is cleared.
-export const DEFAULT_BASE_URL = 'http://192.168.0.127:8000';
+export const DEFAULT_BASE_URL = 'http://10.10.31.57:8000';
 export const TOKEN_KEY = 'nestboard_token';
 
 // Persisted key for the user-configurable server URL.
