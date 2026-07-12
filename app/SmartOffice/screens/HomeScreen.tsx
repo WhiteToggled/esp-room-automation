@@ -35,6 +35,7 @@ import AdminUsersScreen from './AdminUsersScreen';
 import AnalyticsScreen from './AnalyticsScreen';
 import SchedulesScreen from './SchedulesScreen';
 import SettingsScreen from './SettingsScreen';
+import UserSettingsScreen from './UserSettingsScreen';
 import LogsScreen from './LogsScreen';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -46,7 +47,7 @@ const TIMING = { duration: 280, easing: Easing.out(Easing.cubic) };
 
 // Tab order: Home=0, Schedules=1, Analytics=2, Users=3, Settings=4, Logs=5
 const ADMIN_OFFSETS: Record<TabName, number> = { home: 0, schedules: 1, analytics: 2, users: 3, settings: 4, logs: 5 };
-const USER_OFFSETS:  Record<TabName, number> = { home: 0, schedules: 1, analytics: 0, users: 0, settings: 0, logs: 0 };
+const USER_OFFSETS:  Record<TabName, number> = { home: 0, schedules: 1, analytics: 0, users: 0, settings: 2, logs: 0 };
 const tabOffset = (tab: TabName, isAdmin: boolean): number =>
   (isAdmin ? ADMIN_OFFSETS : USER_OFFSETS)[tab];
 
@@ -118,7 +119,7 @@ const HomeScreen: React.FC = () => {
   // Ordered list of tabs visible to this user — used for swipe navigation
   const visibleTabs: TabName[] = isAdmin
     ? ['home', 'schedules', 'analytics', 'users', 'settings', 'logs']
-    : ['home', 'schedules'];
+    : ['home', 'schedules', 'settings'];
 
   const handleSwipe = useCallback((translationX: number) => {
     const idx = visibleTabs.indexOf(activeTab);
@@ -170,9 +171,11 @@ const HomeScreen: React.FC = () => {
     transform: [{ translateX: (3 - offset.value) * SCREEN_WIDTH }],
   }));
 
-  // Settings: position 4 (admin only)
+  // Settings: position 4 for admin (home,schedules,analytics,users,settings,...),
+  // position 2 for regular users (home,schedules,settings).
+  const settingsPos = isAdmin ? 4 : 2;
   const settingsAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: (4 - offset.value) * SCREEN_WIDTH }],
+    transform: [{ translateX: (settingsPos - offset.value) * SCREEN_WIDTH }],
   }));
 
   // Logs: always position 5 (admin only)
@@ -185,6 +188,18 @@ const HomeScreen: React.FC = () => {
     () => (isAdmin ? cabins : cabins.filter((c) => assignedCabinIds.includes(c.id))),
     [cabins, isAdmin, assignedCabinIds.join(',')]
   );
+
+  // A non-admin with exactly one assigned cabin gets it opened expanded
+  // automatically (once, after the first data load) so they land straight on
+  // its controls. We don't reopen it after they close it.
+  const autoExpandedRef = useRef(false);
+  useEffect(() => {
+    if (isAdmin || initialLoading || autoExpandedRef.current) return;
+    if (visibleCabins.length === 1) {
+      autoExpandedRef.current = true;
+      setExpandedCabinId(visibleCabins[0].id);
+    }
+  }, [isAdmin, initialLoading, visibleCabins]);
 
   // Kept in sync with `cabins` so the toggle callbacks below can read current
   // state (for the MQTT topic lookup) without depending on `cabins` directly —
@@ -473,20 +488,20 @@ const HomeScreen: React.FC = () => {
           </Animated.View>
         )}
 
-        {/* Settings tab (admin only) */}
-        {isAdmin && (
-          <Animated.View
-            style={[StyleSheet.absoluteFill, settingsAnimStyle]}
-            pointerEvents={activeTab === 'settings' ? 'auto' : 'none'}
-          >
-            {visitedTabs.has('settings') && (
-              <SettingsScreen
-                isActive={activeTab === 'settings'}
-                onUserChanged={() => setUsersRefreshKey((k) => k + 1)}
-              />
-            )}
-          </Animated.View>
-        )}
+        {/* Settings tab — all users; admins get the full screen, others a lean one */}
+        <Animated.View
+          style={[StyleSheet.absoluteFill, settingsAnimStyle]}
+          pointerEvents={activeTab === 'settings' ? 'auto' : 'none'}
+        >
+          {visitedTabs.has('settings') && (isAdmin ? (
+            <SettingsScreen
+              isActive={activeTab === 'settings'}
+              onUserChanged={() => setUsersRefreshKey((k) => k + 1)}
+            />
+          ) : (
+            <UserSettingsScreen />
+          ))}
+        </Animated.View>
 
         {/* Logs tab (admin only) */}
         {isAdmin && (

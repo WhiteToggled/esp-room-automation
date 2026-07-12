@@ -19,7 +19,7 @@ const TABS: Tab[] = [
   { name: 'schedules', icon: 'calendar-outline', label: 'Schedules' },
   { name: 'analytics', icon: 'bar-chart-outline', label: 'Analytics', adminOnly: true },
   { name: 'users',     icon: 'people-outline',   label: 'Users',    adminOnly: true },
-  { name: 'settings',  icon: 'settings-outline', label: 'Settings', adminOnly: true },
+  { name: 'settings',  icon: 'settings-outline', label: 'Settings' },
   { name: 'logs',      icon: 'document-text-outline', label: 'Logs', adminOnly: true },
 ];
 

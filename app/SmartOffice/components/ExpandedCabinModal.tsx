@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, Animated } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, TouchableWithoutFeedback, Modal, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Cabin } from '../constants/cabinData';
@@ -29,20 +29,38 @@ const ExpandedCabinModal: React.FC<ExpandedCabinModalProps> = ({
   const scale = useRef(new Animated.Value(0.85)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
+  // Kept mounted through the exit animation, then torn down. Separate from the
+  // `cabin` prop so the card can animate out before the parent clears it.
+  const [render, setRender] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
 
+  // Animate in whenever a cabin is opened (or a different one is swapped in).
   useEffect(() => {
     if (cabin) {
+      setRender(true);
+      setEditing(false); // never reopen mid-edit for a different cabin
       scale.setValue(0.85);
       opacity.setValue(0);
-      setEditing(false); // never reopen mid-edit for a different cabin
       Animated.parallel([
         Animated.spring(scale, { toValue: 1, useNativeDriver: true, damping: 16, stiffness: 220 }),
-        Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 220, useNativeDriver: true }),
       ]).start();
     }
   }, [cabin?.id]);
+
+  // Play the exit animation first, then actually close (parent clears the cabin).
+  const handleClose = () => {
+    Animated.parallel([
+      Animated.timing(scale, { toValue: 0.9, duration: 160, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 0, duration: 160, useNativeDriver: true }),
+    ]).start(({ finished }) => {
+      if (finished) {
+        setRender(false);
+        onClose();
+      }
+    });
+  };
 
   const startEditing = () => {
     if (!cabin) return;
@@ -59,16 +77,19 @@ const ExpandedCabinModal: React.FC<ExpandedCabinModalProps> = ({
   const isAnyOn = !!cabin && (cabin.light.isOn || cabin.fan.isOn);
 
   return (
-    <Modal transparent animationType="fade" visible={!!cabin} onRequestClose={onClose}>
-      <View style={styles.overlay}>
+    <Modal transparent animationType="none" visible={render} onRequestClose={handleClose}>
+      {/* Tapping the dimmed backdrop closes; taps on the card are swallowed. */}
+      <TouchableWithoutFeedback accessible={false} onPress={handleClose}>
+      <Animated.View style={[styles.overlay, { opacity }]}>
         {cabin && (
-          <Animated.View style={[styles.card, { opacity, transform: [{ scale }] }]}>
+          <TouchableWithoutFeedback accessible={false} onPress={() => {}}>
+          <Animated.View style={[styles.card, { transform: [{ scale }] }]}>
             {/* Header */}
             <View style={styles.header}>
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>{cabin.number}</Text>
               </View>
-              <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.7}>
+              <TouchableOpacity style={styles.closeBtn} onPress={handleClose} activeOpacity={0.7}>
                 <Ionicons name="close" size={18} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
@@ -141,8 +162,10 @@ const ExpandedCabinModal: React.FC<ExpandedCabinModalProps> = ({
               <ToggleSwitch isOn={cabin.fan.isOn} onToggle={onToggleFan} />
             </View>
           </Animated.View>
+          </TouchableWithoutFeedback>
         )}
-      </View>
+      </Animated.View>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 };
