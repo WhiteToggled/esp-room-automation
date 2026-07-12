@@ -1,4 +1,5 @@
 from datetime import timedelta
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -58,4 +59,201 @@ def me(current_user: dict = Depends(get_current_user)):
         "username": current_user.get("username"),
         "role": current_user.get("role", "user"),
         "rooms": current_user.get("rooms", []),
+    }
+
+
+class BiometricKeyEnrollment(BaseModel):
+    public_key: str
+
+
+class BiometricChallengeRequest(BaseModel):
+    username: Optional[str] = None
+    device_id: Optional[str] = None
+
+
+class BiometricVerifyRequest(BaseModel):
+    device_id: str
+    nonce: str
+    signature: str
+    timestamp: Optional[int] = None
+
+
+@router.post("/devices/{device_id}/biometric-key")
+async def enroll_biometric_key(
+    device_id: str,
+    body: BiometricKeyEnrollment,
+    current_user: dict = Depends(get_current_user),
+):
+    import base64
+    from cryptography.hazmat.primitives import serialization
+    from ..users_db import save_biometric_key
+    
+    pub_key_str = body.public_key.strip()
+    try:
+        if pub_key_str.startswith("-----BEGIN PUBLIC KEY-----"):
+            serialization.load_pem_public_key(pub_key_str.encode('utf-8'))
+        else:
+            der_data = base64.b64decode(pub_key_str)
+            serialization.load_der_public_key(der_data)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid public key format: {e}"
+        )
+        
+    save_biometric_key(current_user["username"], device_id, pub_key_str)
+    return {"detail": "Biometric public key registered successfully"}
+
+
+@router.post("/auth/biometric/challenge")
+async def get_biometric_challenge(body: BiometricChallengeRequest):
+    import secrets
+    from ..users_db import get_biometric_keys_by_device, create_biometric_challenge, get_biometric_key
+    
+    username = body.username
+    device_id = body.device_id
+    
+    if not username and not device_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Either username or device_id must be provided"
+        )
+        
+    if username:
+        user = get_user(username)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+            
+        if device_id:
+            pub_key = get_biometric_key(username, device_id)
+            if not pub_key:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Biometric key not registered for this device and user"
+                )
+    else:
+        # device_id only
+        keys = get_biometric_keys_by_device(device_id)
+        if not keys:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No biometric keys registered for this device"
+            )
+        if len(keys) > 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Multiple users registered on this device, please specify username"
+            )
+        username = keys[0]["username"]
+        
+    challenge = secrets.token_hex(32)
+    create_biometric_challenge(challenge, username, device_id or "unknown", expires_in_seconds=300)
+    
+    return {
+        "challenge": challenge,
+        "username": username
+    }
+
+
+@router.post("/auth/biometric/verify")
+async def verify_biometric_login(body: BiometricVerifyRequest):
+    import time
+    import base64
+    from datetime import datetime
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives import hashes
+    from ..users_db import consume_biometric_challenge, get_biometric_key
+    
+    challenge_record = consume_biometric_challenge(body.nonce)
+    if not challenge_record:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid, expired, or already used challenge (nonce)"
+        )
+        
+    expires_at = challenge_record["expires_at"]
+    if isinstance(expires_at, str):
+        try:
+            expires_at = datetime.fromisoformat(expires_at)
+        except ValueError:
+            pass
+            
+    now = datetime.utcnow()
+    if expires_at < now:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Challenge has expired"
+        )
+        
+    if challenge_record["device_id"] != "unknown" and challenge_record["device_id"] != body.device_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Device ID mismatch for this challenge"
+        )
+        
+    username = challenge_record["username"]
+    
+    pub_key_str = get_biometric_key(username, body.device_id)
+    if not pub_key_str:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Biometric public key not registered for this device"
+        )
+        
+    if body.timestamp is not None:
+        is_millis = body.timestamp > 1e11
+        server_now = time.time() * 1000 if is_millis else time.time()
+        skew_limit = 300000 if is_millis else 300
+        
+        if abs(server_now - body.timestamp) > skew_limit:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Clock out of sync or timestamp too old"
+            )
+        signed_message = f"{body.nonce}:{body.timestamp}".encode("utf-8")
+    else:
+        signed_message = body.nonce.encode("utf-8")
+        
+    try:
+        if pub_key_str.startswith("-----BEGIN PUBLIC KEY-----"):
+            pub_key = serialization.load_pem_public_key(pub_key_str.encode('utf-8'))
+        else:
+            der_data = base64.b64decode(pub_key_str)
+            pub_key = serialization.load_der_public_key(der_data)
+            
+        signature_bytes = base64.b64decode(body.signature)
+        
+        pub_key.verify(
+            signature_bytes,
+            signed_message,
+            ec.ECDSA(hashes.SHA256())
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Signature verification failed: {e}"
+        )
+        
+    user = get_user(username)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User no longer exists"
+        )
+        
+    print(f"biometric login OK: {user['username']} ({user.get('role', 'user')})")
+    access_token = create_access_token(
+        data={"sub": user["username"]},
+        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "username": user["username"],
+        "role": user.get("role", "user"),
+        "rooms": user.get("rooms", []),
     }

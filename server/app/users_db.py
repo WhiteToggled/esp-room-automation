@@ -41,6 +41,29 @@ def init_users_db():
         )
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS room TEXT")
 
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS biometric_keys (
+                username TEXT NOT NULL REFERENCES users(username) ON DELETE CASCADE,
+                device_id TEXT NOT NULL,
+                public_key TEXT NOT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (username, device_id)
+            )
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS biometric_challenges (
+                challenge TEXT PRIMARY KEY,
+                username TEXT NOT NULL,
+                device_id TEXT NOT NULL,
+                expires_at TIMESTAMP NOT NULL
+            )
+            """
+        )
+
         cur.execute("SELECT 1 FROM users WHERE username = 'admin'")
         if not cur.fetchone():
             admin_password = os.getenv("ADMIN_PASSWORD", "1234")
@@ -141,5 +164,94 @@ def remove_user(username: str) -> bool:
         cur.execute("DELETE FROM users WHERE username = %s", (username,))
         con.commit()
         return cur.rowcount > 0
+    finally:
+        con.close()
+
+
+def save_biometric_key(username: str, device_id: str, public_key: str) -> None:
+    con = _connect()
+    try:
+        cur = con.cursor()
+        cur.execute(
+            """
+            INSERT INTO biometric_keys (username, device_id, public_key)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (username, device_id) 
+            DO UPDATE SET public_key = EXCLUDED.public_key, created_at = CURRENT_TIMESTAMP
+            """,
+            (username, device_id, public_key),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+
+def get_biometric_key(username: str, device_id: str) -> Optional[str]:
+    con = _connect()
+    try:
+        cur = con.cursor()
+        cur.execute(
+            "SELECT public_key FROM biometric_keys WHERE username = %s AND device_id = %s",
+            (username, device_id),
+        )
+        row = cur.fetchone()
+        return row[0] if row else None
+    finally:
+        con.close()
+
+
+def get_biometric_keys_by_device(device_id: str) -> List[Dict]:
+    con = _connect()
+    try:
+        cur = con.cursor()
+        cur.execute(
+            "SELECT username, public_key FROM biometric_keys WHERE device_id = %s",
+            (device_id,),
+        )
+        return [{"username": row[0], "public_key": row[1]} for row in cur.fetchall()]
+    finally:
+        con.close()
+
+
+def create_biometric_challenge(challenge: str, username: str, device_id: str, expires_in_seconds: int = 300) -> None:
+    con = _connect()
+    try:
+        cur = con.cursor()
+        from datetime import datetime, timedelta
+        now = datetime.utcnow()
+        # Cleanup expired challenges
+        cur.execute("DELETE FROM biometric_challenges WHERE expires_at < %s", (now,))
+        
+        expires_at = now + timedelta(seconds=expires_in_seconds)
+        cur.execute(
+            """
+            INSERT INTO biometric_challenges (challenge, username, device_id, expires_at)
+            VALUES (%s, %s, %s, %s)
+            """,
+            (challenge, username, device_id, expires_at),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+
+def consume_biometric_challenge(challenge: str) -> Optional[Dict]:
+    con = _connect()
+    try:
+        cur = con.cursor()
+        cur.execute(
+            "SELECT username, device_id, expires_at FROM biometric_challenges WHERE challenge = %s",
+            (challenge,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        cur.execute("DELETE FROM biometric_challenges WHERE challenge = %s", (challenge,))
+        con.commit()
+        return {
+            "username": row[0],
+            "device_id": row[1],
+            "expires_at": row[2],
+        }
     finally:
         con.close()
