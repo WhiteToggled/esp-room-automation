@@ -1,0 +1,891 @@
+%==============================================================================
+%  Nestboard — Frontend Technical Documentation
+%  ESP Room Automation System
+%  COAL Project · Semester 4 · 2024 Session · UET
+%==============================================================================
+\documentclass[11pt,a4paper]{article}
+
+%------------------------------- Packages -------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{listings}
+\usepackage{fancyhdr}
+\usepackage{tcolorbox}
+\usepackage{hyperref}
+\usepackage{parskip}
+
+%------------------------------- Colors ---------------------------------------
+\definecolor{accent}{HTML}{2F80ED}
+\definecolor{accentDark}{HTML}{1D6FD8}
+\definecolor{ink}{HTML}{14161B}
+\definecolor{muted}{HTML}{5B6270}
+\definecolor{codebg}{HTML}{F5F7FA}
+\definecolor{codeframe}{HTML}{DDE3EC}
+\definecolor{keyword}{HTML}{9B2393}
+\definecolor{strcol}{HTML}{1FA15A}
+\definecolor{comment}{HTML}{8A94A6}
+
+%------------------------------- Hyperref -------------------------------------
+\hypersetup{
+  colorlinks=true,
+  linkcolor=accentDark,
+  urlcolor=accentDark,
+  citecolor=accentDark,
+  pdftitle={Nestboard Frontend Documentation},
+  pdfauthor={Abdullah Amir (2024-CS-156)},
+}
+
+%------------------------------- Headings -------------------------------------
+\titleformat{\section}
+  {\color{accentDark}\Large\bfseries}{\thesection}{0.6em}{}
+\titleformat{\subsection}
+  {\color{ink}\large\bfseries}{\thesubsection}{0.6em}{}
+\titleformat{\subsubsection}
+  {\color{ink}\normalsize\bfseries}{\thesubsubsection}{0.6em}{}
+
+%------------------------------- Header/Footer --------------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+\fancyhead[L]{\small\color{muted}Nestboard — Frontend Documentation}
+\fancyhead[R]{\small\color{muted}\leftmark}
+\fancyfoot[C]{\thepage}
+
+%------------------------------- Listings -------------------------------------
+\lstdefinelanguage{tsx}{
+  morekeywords={const,let,var,function,return,import,from,export,default,
+    interface,type,extends,implements,async,await,new,if,else,for,while,
+    switch,case,break,continue,try,catch,finally,throw,class,public,private,
+    React,useState,useEffect,useMemo,useCallback,useRef,useContext,true,false,
+    null,undefined,void,number,string,boolean,Promise,Record,Partial,Set,Map},
+  sensitive=true,
+  morecomment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  morestring=[b]',
+  morestring=[b]",
+  morestring=[b]`,
+}
+
+\lstset{
+  language=tsx,
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\footnotesize\color{ink},
+  keywordstyle=\color{keyword}\bfseries,
+  stringstyle=\color{strcol},
+  commentstyle=\color{comment}\itshape,
+  frame=single,
+  rulecolor=\color{codeframe},
+  framesep=6pt,
+  breaklines=true,
+  breakatwhitespace=true,
+  showstringspaces=false,
+  columns=fullflexible,
+  keepspaces=true,
+  tabsize=2,
+  xleftmargin=8pt,
+  xrightmargin=4pt,
+  aboveskip=10pt,
+  belowskip=10pt,
+}
+
+% Inline code helper
+\newcommand{\code}[1]{\colorbox{codebg}{\ttfamily\small #1}}
+
+% Callout box
+\newtcolorbox{notebox}{
+  colback=codebg,
+  colframe=accent,
+  boxrule=0.5pt,
+  arc=2pt,
+  left=8pt,right=8pt,top=6pt,bottom=6pt,
+}
+
+%==============================================================================
+\begin{document}
+
+%------------------------------- Title Page -----------------------------------
+\begin{titlepage}
+  \centering
+  \vspace*{2cm}
+  {\color{accent}\Huge\bfseries Nestboard\par}
+  \vspace{0.4cm}
+  {\Large Room Automation System\par}
+  \vspace{0.3cm}
+  {\large\color{muted} Frontend Technical Documentation\par}
+  \vspace{2cm}
+
+  \begin{tcolorbox}[colback=codebg,colframe=accent,width=0.75\textwidth,
+      arc=4pt,boxrule=1pt]
+    \centering
+    \large
+    A cross-platform mobile client for the ESP32-based\\
+    room-automation stack, built with React Native and Expo.
+  \end{tcolorbox}
+
+  \vspace{1.2cm}
+  {\large Mobile Application \& Frontend developed by\par}
+  \vspace{0.3cm}
+  {\color{accent}\LARGE\bfseries Abdullah Amir\par}
+  \vspace{0.15cm}
+  {\large\color{muted} 2024-CS-156\par}
+
+  \vfill
+
+  \begin{tabular}{rl}
+    \textbf{Project:}     & ESP Room Automation \\
+    \textbf{Module:}      & Frontend (\texttt{app/SmartOffice}) \\
+    \textbf{Author:}      & Abdullah Amir (2024-CS-156) \\
+    \textbf{Platform:}    & React Native · Expo · TypeScript \\
+    \textbf{Course:}      & Computer Organization \& Assembly Language (COAL) \\
+    \textbf{Session:}     & Semester 4 · 2024 · UET \\
+  \end{tabular}
+
+  \vspace{1.5cm}
+  {\color{muted}\small Document authored by Abdullah Amir (2024-CS-156) · generated \today}
+\end{titlepage}
+
+%------------------------------- TOC ------------------------------------------
+\tableofcontents
+\thispagestyle{fancy}
+\newpage
+
+%==============================================================================
+\section{Introduction}
+%==============================================================================
+
+\textbf{Nestboard} is the mobile front-end of the ESP Room Automation system. It
+provides a polished, real-time interface for monitoring and controlling
+electrical devices (lights and fans) distributed across a set of rooms
+(referred to in the UI as \emph{cabins}). The application talks to a FastAPI
+backend over a REST API; the backend, in turn, relays device state changes to
+ESP32 microcontrollers through MQTT.
+
+The client is a universal application: a single TypeScript/React Native codebase
+targets Android, iOS and the web through the Expo toolchain. This document
+describes the architecture, structure, screens, components and supporting
+infrastructure of the front-end.
+
+The mobile application front-end and this accompanying document were designed and
+developed by \textbf{Abdullah Amir (2024-CS-156)}.
+
+\subsection{Feature Summary}
+
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Authenticated access} with token-based sessions, role separation
+        (\emph{admin} vs.\ \emph{user}) and a built-in default admin account.
+  \item \textbf{Live device control} — per-cabin light/fan toggles with
+        optimistic UI updates and background reconciliation via polling.
+  \item \textbf{Master controls} for turning all lights on, all fans on, or all
+        devices off (with a hold-to-confirm safety gesture).
+  \item \textbf{Scheduling} — time- and day-based automations targeting one or
+        many devices.
+  \item \textbf{Analytics} — a Gantt-style device-uptime timeline and per-room
+        uptime statistics.
+  \item \textbf{Activity logs} — historical state snapshots with an in-house
+        line chart (no external charting dependency).
+  \item \textbf{User management} — admins can create, delete, reset passwords for
+        and assign cabins to users.
+  \item \textbf{Theming} — light, dark and system-driven colour schemes.
+  \item \textbf{Runtime server configuration} — the backend URL is editable from
+        the login screen and persisted on device.
+\end{itemize}
+
+%==============================================================================
+\section{Technology Stack}
+%==============================================================================
+
+\begin{longtable}{@{}p{0.34\textwidth}p{0.60\textwidth}@{}}
+  \toprule
+  \textbf{Concern} & \textbf{Technology / Library} \\
+  \midrule
+  \endhead
+  Framework            & React 19 + React Native 0.81 \\
+  Tooling / runtime    & Expo SDK 54 (\texttt{expo}, \texttt{expo-router}) \\
+  Language             & TypeScript 5.9 (strict mode) \\
+  Navigation           & Expo Router (file-based) + React Navigation \\
+  Animations           & \texttt{react-native-reanimated} 4, Animated API \\
+  Gestures             & \texttt{react-native-gesture-handler} \\
+  Local persistence    & \texttt{@react-native-async-storage/async-storage} \\
+  Icons                & \texttt{@expo/vector-icons} (Ionicons) \\
+  Haptics              & \texttt{expo-haptics} \\
+  Visual effects       & \texttt{expo-linear-gradient}, \texttt{expo-blur} \\
+  Linting              & ESLint 9 + \texttt{eslint-config-expo} \\
+  Build / release      & EAS (\texttt{eas.json}) \\
+  \bottomrule
+\end{longtable}
+
+\begin{notebox}
+\textbf{Package identity.} The npm package is named \code{nestboard}; the Expo
+app is \code{Nestboard} with Android package
+\code{com.abdullahamir.Nestboard}. The New Architecture (\code{newArchEnabled})
+and the React Compiler (\code{experiments.reactCompiler}) are both enabled.
+\end{notebox}
+
+%==============================================================================
+\section{Project Structure}
+%==============================================================================
+
+The front-end lives under \code{app/SmartOffice}. It follows a conventional
+Expo Router layout: the \code{app/} directory defines routes, while the
+substantive UI lives in \code{screens/} and \code{components/}.
+
+\begin{lstlisting}[language=tsx]
+app/SmartOffice/
+  app/                     # Expo Router routes (thin re-exports)
+    _layout.tsx            # Root layout: providers + navigation guard
+    login.tsx, signup.tsx  # Auth routes
+    (tabs)/
+      _layout.tsx          # Tab group (native tab bar hidden)
+      index.tsx            # -> HomeScreen
+      analytics.tsx        # -> AnalyticsScreen
+  screens/                 # Full-page UI
+    HomeScreen.tsx         # Shell hosting all tabs + device grid
+    LoginScreen.tsx, SignupScreen.tsx
+    SchedulesScreen.tsx    # Automations CRUD
+    AnalyticsScreen.tsx    # Uptime Gantt + stats
+    LogsScreen.tsx         # State-snapshot history
+    SettingsScreen.tsx     # Appearance + user admin
+    AdminUsersScreen.tsx   # Cabin assignment
+  components/              # Reusable UI widgets
+  context/                 # AuthContext, ThemeContext
+  api/                     # client.ts (fetch wrapper), devices.ts (endpoints)
+  constants/               # theme, apiConfig, cabinData, acknowledgements
+  hooks/                   # useCachedResource (SWR-style cache)
+  assets/                  # icons, splash, profile images
+  app.json, eas.json       # Expo / EAS configuration
+\end{lstlisting}
+
+\subsection{Routing Philosophy}
+
+Routes under \code{app/} are intentionally thin. For example,
+\code{app/(tabs)/index.tsx} is a single re-export:
+
+\begin{lstlisting}[language=tsx]
+import HomeScreen from '../../screens/HomeScreen';
+export default HomeScreen;
+\end{lstlisting}
+
+This keeps route files declarative and concentrates real logic in
+\code{screens/}. Notably, the native tab bar is hidden
+(\code{tabBarStyle: \{ display: 'none' \}}); \code{HomeScreen} instead renders a
+custom \code{BottomNav} and manages inter-tab transitions itself (see
+Section~\ref{sec:home}).
+
+%==============================================================================
+\section{Application Architecture}
+%==============================================================================
+
+\subsection{Root Layout and Providers}
+
+\code{app/\_layout.tsx} composes the provider tree and installs a navigation
+guard. The hierarchy is:
+
+\begin{lstlisting}[language=tsx]
+<GestureHandlerRootView>
+  <AuthProvider>
+    <ThemeContextProvider>
+      <ThemedNavigation />   // NavigationGuard + <Stack> + StatusBar
+    </ThemeContextProvider>
+  </AuthProvider>
+</GestureHandlerRootView>
+\end{lstlisting}
+
+On mount, the root also fires a fire-and-forget \code{pingHealth()} against the
+backend to warm the connection.
+
+\subsubsection{Navigation Guard}
+
+\code{NavigationGuard} enforces authentication by comparing the current route
+segment against the user's login state:
+
+\begin{lstlisting}[language=tsx]
+const inAuthGroup = segments[0] === '(tabs)';
+if (!user && inAuthGroup) router.replace('/login');
+else if (user && !inAuthGroup) router.replace('/');
+\end{lstlisting}
+
+Unauthenticated users are redirected to \code{/login}; authenticated users are
+kept inside the \code{(tabs)} group. Redirection is deferred until the auth
+state finishes loading (\code{loading} flag) to avoid a flash of the wrong
+screen at startup.
+
+\subsection{Authentication (\texttt{context/AuthContext.tsx})}
+\label{sec:auth}
+
+\code{AuthContext} is the single source of truth for the signed-in user. It
+exposes:
+
+\begin{longtable}{@{}p{0.26\textwidth}p{0.68\textwidth}@{}}
+  \toprule
+  \textbf{Member} & \textbf{Purpose} \\
+  \midrule
+  \endhead
+  \code{user}    & Current \code{AppUser} or \code{null}. \\
+  \code{loading} & \code{true} while the persisted session is being restored. \\
+  \code{login}   & Authenticates via \code{POST /login} (OAuth2 form). \\
+  \code{signup}  & Registers via \code{POST /signup}. \\
+  \code{logout}  & Clears the token and session from storage. \\
+  \bottomrule
+\end{longtable}
+
+\subsubsection{User Model}
+
+\begin{lstlisting}[language=tsx]
+interface AppUser {
+  id: string;
+  name: string;
+  email: string;
+  password: string;             // never populated after login
+  role: 'admin' | 'user';
+  assignedCabinIds: string[];   // e.g. ['cabin-1', 'cabin-3']
+}
+\end{lstlisting}
+
+Backend "rooms" (\code{r1}, \code{r2}, \ldots) are mapped to UI "cabins"
+(\code{cabin-1}, \code{cabin-2}, \ldots) by \code{roomsToCabinIds()}.
+
+\subsubsection{Session Persistence and Restoration}
+
+Two keys are stored in AsyncStorage: a session username
+(\code{nestboard\_session}) and a bearer token (\code{nestboard\_token}). On
+startup the provider:
+
+\begin{enumerate}[leftmargin=1.5em]
+  \item Reads both keys in parallel.
+  \item If the stored id is the built-in \code{ADMIN}, restores it directly.
+  \item Otherwise, fetches the live profile via \code{GET /me} so that role and
+        room assignments are always current; a failure clears the session
+        (expired token) and forces re-login.
+\end{enumerate}
+
+\subsubsection{Built-in Admin}
+
+A hard-coded administrator account is provided for first-run/bootstrap use:
+
+\begin{lstlisting}[language=tsx]
+const ADMIN = {
+  id: 'admin', name: 'Admin', email: 'admin@nestboard.com',
+  password: 'admin123', role: 'admin', assignedCabinIds: [],
+};
+\end{lstlisting}
+
+\begin{notebox}
+\textbf{Security note.} The default admin credentials are embedded in the client
+bundle. For a production deployment these should be removed or replaced with a
+server-verified account, since anything shipped in the app binary is
+recoverable by an attacker.
+\end{notebox}
+
+\subsection{Theming (\texttt{context/ThemeContext.tsx})}
+
+\code{ThemeContextProvider} manages a three-way preference —
+\code{'light'}, \code{'dark'} or \code{'system'} — persisted under
+\code{nestboard\_theme\_pref}. When the preference is \code{'system'} it follows
+the device colour scheme via React Native's \code{useColorScheme()}.
+
+The resolved \code{colors} object (from \code{constants/theme.ts}) is memoised
+and distributed through context, so every component re-styles automatically when
+the theme changes. The exposed API is \code{\{ colors, theme, preference,
+setPreference, toggleTheme \}}.
+
+\subsection{Design System (\texttt{constants/theme.ts})}
+
+A small, explicit design system underpins the "glass"/frosted aesthetic used
+throughout the app.
+
+\paragraph{Colour tokens.} Two palettes — \code{darkColors} and
+\code{lightColors} — share an identical key set (enforced by
+\code{typeof darkColors}) so that any component works in both themes. Key roles:
+
+\begin{longtable}{@{}p{0.24\textwidth}p{0.70\textwidth}@{}}
+  \toprule
+  \textbf{Token} & \textbf{Role} \\
+  \midrule
+  \endhead
+  \code{background} / \code{surface} & Page and card backgrounds. \\
+  \code{glass}, \code{glassBorder}, \code{glassHighlight} & Translucent
+    "frosted" fills, borders and top highlights. \\
+  \code{accent}, \code{accentLight}, \code{accentGlow} & Primary blue
+    (\#2F80ED) and its variants for active/glow states. \\
+  \code{text}, \code{textSecondary}, \code{textMuted} & Typographic hierarchy. \\
+  \code{success}, \code{blue}, \code{toggleOff} & Status and control colours. \\
+  \bottomrule
+\end{longtable}
+
+\paragraph{Spacing and radii.} Fixed scales keep layout rhythm consistent:
+
+\begin{lstlisting}[language=tsx]
+SPACING = { xs:4, sm:8, md:12, lg:16, xl:20, xxl:24, xxxl:32 };
+RADIUS  = { sm:10, md:16, lg:20, xl:26, full:999 };
+\end{lstlisting}
+
+Every screen and component builds its \code{StyleSheet} through a
+\code{createStyles(colors)} factory wrapped in \code{useMemo}, which is the
+codebase's standard idiom for theme-aware styling.
+
+%==============================================================================
+\section{Networking Layer}
+%==============================================================================
+
+\subsection{HTTP Client (\texttt{api/client.ts})}
+
+A thin \code{fetch} wrapper exposes \code{get}, \code{post}, \code{put},
+\code{del} and a specialised \code{postForm} (for OAuth2
+\code{x-www-form-urlencoded} login/signup). Each request:
+
+\begin{itemize}[leftmargin=1.4em]
+  \item resolves the base URL asynchronously (see \S\ref{sec:apiconfig});
+  \item attaches \code{Authorization: Bearer <token>} when a token is present;
+  \item routes the response through a shared \code{handle()} function.
+\end{itemize}
+
+\subsubsection{Global 401 Handling}
+
+If an authenticated request returns \code{401}, the client invokes a globally
+registered \code{onUnauthorized} handler. \code{AuthContext} registers this
+handler to clear the session and drop the user back to the login screen — a
+clean, centralised expired-token flow:
+
+\begin{lstlisting}[language=tsx]
+async function handle(res, hadToken) {
+  if (res.status === 401 && hadToken && onUnauthorized) onUnauthorized();
+  if (!res.ok) throw res;      // raw Response is thrown on error
+  return res.json();
+}
+\end{lstlisting}
+
+Because the raw \code{Response} is thrown on non-2xx, callers can inspect
+\code{status} and read \code{detail} from the JSON body (a pattern used
+throughout for error messages).
+
+\subsection{Endpoint Bindings (\texttt{api/devices.ts})}
+
+This module is the typed contract with the backend. It defines the data
+interfaces and one function per endpoint. Highlights:
+
+\begin{longtable}{@{}p{0.30\textwidth}p{0.30\textwidth}p{0.34\textwidth}@{}}
+  \toprule
+  \textbf{Function} & \textbf{Endpoint} & \textbf{Purpose} \\
+  \midrule
+  \endhead
+  \code{pingHealth}      & \code{GET /health}        & Connectivity warm-up. \\
+  \code{getStates}       & \code{GET /states}        & Device states + room names. \\
+  \code{setDevice}       & \code{POST /set/\{id\}}   & Set one device on/off. \\
+  \code{setAll}          & \code{POST /set-all}      & Set every visible device. \\
+  \code{lightsOn/fansOn/allOff} & \code{POST /lights/on \ldots} & Master actions. \\
+  \code{listRooms/renameRoom} & \code{GET/PUT /rooms} & Room name management. \\
+  \code{getLogs}         & \code{GET /logs}          & Recent state snapshots. \\
+  \code{getLogsRange}    & \code{GET /logs/range}    & Bucketed chart data. \\
+  \code{triggerLog}      & \code{POST /logs/trigger} & Capture a snapshot now. \\
+  \code{listSchedules \ldots} & \code{/schedules}    & Schedule CRUD. \\
+  \code{listUsers \ldots} & \code{/users}            & User admin. \\
+  \code{assignUserRooms} & \code{PUT /users/\{u\}/rooms} & Cabin assignment. \\
+  \code{changePassword}  & \code{POST /change-password} & Password reset. \\
+  \bottomrule
+\end{longtable}
+
+\subsubsection{Defensive Normalisation}
+
+The layer is deliberately tolerant of backend shape drift. Two examples:
+
+\begin{itemize}[leftmargin=1.4em]
+  \item \code{getStates} accepts both the new \code{\{ states, names \}} shape
+        and the legacy flat map, always returning the new shape.
+  \item \code{normalizeSchedule} guarantees \code{device\_ids} is always a
+        \code{string[]}, tolerating a legacy singular \code{device\_id} field.
+\end{itemize}
+
+\subsubsection{Core Data Models}
+
+\begin{lstlisting}[language=tsx]
+interface StatesResponse {
+  states: Record<string, number>;  // 'r1/l1' -> 0|1
+  names:  Record<string, string>;  // 'r1' -> 'Reception'
+}
+
+interface Schedule {
+  id: number; device_ids: string[]; action: number;   // 1=on, 0=off
+  hour: number; minute: number; days: string[];        // ['mon',...]
+  enabled: boolean; created_by: string; created_at: string;
+}
+
+interface StateLogEntry {
+  id: number; logged_at: string; snapshot: Record<string, number>;
+}
+\end{lstlisting}
+
+\subsection{Runtime Server Configuration (\texttt{constants/apiConfig.ts})}
+\label{sec:apiconfig}
+
+The backend base URL is not hard-coded at build time. Instead it is:
+
+\begin{itemize}[leftmargin=1.4em]
+  \item defaulted to \code{http://192.168.0.127:8000};
+  \item overridable at runtime from the login screen and persisted under
+        \code{nestboard\_base\_url};
+  \item hydrated once into an in-memory cache so request code can read it
+        synchronously after startup.
+\end{itemize}
+
+\code{normalizeBaseUrl()} is lenient: it accepts a bare IP, an
+\code{IP:port}, or a full URL, and infers the scheme — plain \code{http} for LAN
+addresses/\code{localhost}, \code{https} otherwise — before stripping any
+trailing slash. This makes it easy to point the app at different deployments
+(local hardware, a tunnel, or a hosted server) without rebuilding.
+
+\subsection{Client-Side Caching (\texttt{hooks/useCachedResource.ts})}
+
+A lightweight stale-while-revalidate hook backs the read-heavy screens (logs,
+charts). It layers three tiers:
+
+\begin{enumerate}[leftmargin=1.5em]
+  \item \textbf{In-memory} map for instant reads across tab switches.
+  \item \textbf{AsyncStorage} for persistence across app restarts.
+  \item \textbf{TTL} so the network is only re-hit once a copy is stale.
+\end{enumerate}
+
+The hook returns \code{\{ data, loading, refreshing, refresh, reload, setData
+\}}. It seeds synchronously from the memory cache (so return visits render
+instantly), supports pull-to-refresh (\code{refresh}, always networks) and a
+silent \code{reload} after mutations, and can be gated with an \code{active}
+flag so an off-screen tab performs no work.
+
+%==============================================================================
+\section{Screens}
+%==============================================================================
+
+\subsection{HomeScreen — Application Shell}
+\label{sec:home}
+
+\code{HomeScreen} is the most substantial screen; it is both the device
+dashboard and the host container for every other tab. Rather than mounting
+separate routes, it holds all tab screens as horizontally-stacked
+\code{Animated.View} pages and slides between them.
+
+\subsubsection{Tab Model and Transitions}
+
+Visible tabs depend on role. Admins see six
+(\code{home, schedules, analytics, users, settings, logs}); regular users see
+two (\code{home, schedules}). A single Reanimated shared value \code{offset}
+drives every page's \code{translateX}, producing a smooth carousel:
+
+\begin{lstlisting}[language=tsx]
+offset.value = withTiming(tabOffset(activeTab, isAdmin), TIMING);
+// each page: translateX = (position - offset) * SCREEN_WIDTH
+\end{lstlisting}
+
+Navigation is possible both via the \code{BottomNav} and via horizontal swipe,
+implemented with a \code{PanResponder} that claims the gesture only when
+horizontal motion clearly dominates. Off-screen tabs are lazily mounted the
+first time they are visited (\code{visitedTabs} set), avoiding four screens'
+worth of fetches at launch.
+
+\subsubsection{Device State and the Cabin Model}
+
+The grid is seeded from \code{INITIAL\_CABINS} (six cabins, each with a light
+and a fan) defined in \code{constants/cabinData.ts}:
+
+\begin{lstlisting}[language=tsx]
+interface Cabin {
+  id: string; name: string; number: number;
+  light: CabinDevice;   // { id, label, isOn, topic: 'r1/l1' }
+  fan:   CabinDevice;   // { id, label, isOn, topic: 'r1/f1' }
+}
+\end{lstlisting}
+
+Each device carries an MQTT-style \code{topic} (\code{r\{n\}/l1},
+\code{r\{n\}/f1}) that maps it to a backend device id. Non-admin users see only
+their \code{assignedCabinIds}.
+
+\subsubsection{Optimistic Updates and Reconciliation}
+
+Toggling a device updates local state immediately, then issues
+\code{setDevice()}. To prevent an in-flight poll from "resurrecting" the old
+value, the screen maintains a \code{pendingRef} map of topics to their expected
+settled value:
+
+\begin{itemize}[leftmargin=1.4em]
+  \item On toggle, the topic is marked pending with the expected 0/1, with an
+        8-second safety timeout.
+  \item A background poll runs every 5 seconds calling \code{getStates()} and
+        \code{reconcileStates()}.
+  \item \code{reconcileStates} ignores incoming values for a pending topic until
+        they match the expectation, then releases the lock — eliminating flicker.
+  \item Server-provided room names override the friendly defaults.
+\end{itemize}
+
+To minimise re-renders, \code{applyCabinUpdate} reuses the previous cabin object
+(and the previous array) whenever nothing actually changed, so idle polls cost
+zero renders and \code{CabinCard} (memoised) only re-renders for the cabin that
+changed.
+
+\subsubsection{Additional Behaviours}
+
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Drag-to-reorder} grid, with the order persisted under
+        \code{nestboard\_cabin\_order} and restored on mount.
+  \item \textbf{Master control} (admin only) for bulk actions.
+  \item \textbf{Rename} of a cabin (optimistic, reverts on failure) via
+        \code{renameRoom}.
+  \item An \textbf{"Awaiting Assignment"} empty state for users with no cabins.
+\end{itemize}
+
+\subsection{LoginScreen \& SignupScreen}
+
+Both are form screens sharing the frosted-card aesthetic, keyboard-avoiding
+layout and animated entrance (\code{FadeInView}). \code{LoginScreen} additionally
+hosts the collapsible \textbf{Server settings} panel that reads and writes the
+runtime base URL (\S\ref{sec:apiconfig}). Validation is performed inline;
+network/credential errors are surfaced with specific messages (e.g. invalid
+credentials vs.\ unreachable server, the latter including the target URL).
+\code{SignupScreen} enforces matching passwords and a 4-character minimum, and
+explains that an admin will assign a cabin after registration. Navigation after
+success is handled implicitly by the root \code{NavigationGuard}.
+
+\subsection{SchedulesScreen — Automations}
+
+The largest feature screen. It lists automations as cards and provides a
+bottom-sheet modal form to create or edit them.
+
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Device source of truth.} The device picker is populated from
+        \code{GET /states} keys, so it never offers a non-existent device (which
+        would fail creation). \code{ALL\_DEVICES} (rooms 1--6) is only a fallback.
+  \item \textbf{Multi-device targeting.} A new schedule can target one, several
+        or all available devices via an inline multi-select with "Select all".
+        On edit, the device set is read-only (the backend forbids reassignment).
+  \item \textbf{Time selection} uses the custom \code{WheelTimePicker}
+        (hour~/~minute~/~AM\slash PM).
+  \item \textbf{Day selection} via M--S chips; \textbf{action} is a Turn On /
+        Turn Off segmented control; an \textbf{enabled} toggle completes the form.
+  \item \textbf{Role scoping.} Non-admins only see and can only target schedules
+        touching their assigned devices.
+  \item \textbf{Robust errors.} \code{describeError} extracts FastAPI
+        \code{detail} strings and validation arrays into readable alerts.
+  \item Enabling/disabling a schedule is optimistic and reverts on failure.
+\end{itemize}
+
+\subsection{AnalyticsScreen — Uptime Timeline}
+
+Consumes \code{GET /logs} (up to 500 snapshots) and renders, without any
+charting library:
+
+\begin{itemize}[leftmargin=1.4em]
+  \item A \textbf{totals row} (active now, total devices, snapshot count).
+  \item A \textbf{Gantt chart}: for each selected device, "on" intervals are
+        reconstructed from consecutive snapshots and drawn as bars against a
+        time axis. Selectable ranges are 6h, 12h, 1d, 7d and 30d, with adaptive
+        axis labels and room separators.
+  \item \textbf{Per-room stat tiles} showing uptime percentage and "last seen",
+        colour-coded by uptime, tappable to add/remove a device from the chart.
+\end{itemize}
+
+Data refreshes every 30 seconds and on pull-to-refresh; a \code{triggerLog()} is
+fired on mount so the newest state is captured. All interval and statistics
+maths (\code{buildIntervals}, \code{computeStats}, \code{groupByRoom}) is pure
+and local.
+
+\subsection{LogsScreen — Snapshot History}
+
+A \code{FlatList} of state snapshots, newest first, each an expandable card
+showing the on/off chips for every device and an on-count badge; the latest
+entry is highlighted. The list header embeds \code{LogsChart}. A camera button
+triggers an on-demand snapshot (\code{triggerLog}) and force-reloads the cache.
+The screen is backed by \code{useCachedResource} (30\,s TTL) and only fetches
+when its tab is active. The list is tuned for performance
+(\code{initialNumToRender}, \code{windowSize}, \code{removeClippedSubviews},
+memoised rows).
+
+\subsection{SettingsScreen (Admin)}
+
+Composed of three cards:
+
+\begin{enumerate}[leftmargin=1.5em]
+  \item \textbf{Appearance} — light / dark / system theme selector wired to
+        \code{ThemeContext}.
+  \item \textbf{Create User} — username + password form calling
+        \code{createUser}, with inline validation and success/error feedback.
+        Its state is reset when the tab loses focus (via a \code{formKey}).
+  \item \textbf{Manage Users} — list with per-row password-reset (opening
+        \code{ChangePasswordModal}) and delete (with confirmation) actions.
+\end{enumerate}
+
+Changes propagate to the sibling Users tab through an \code{onUserChanged}
+callback that bumps a refresh key on \code{HomeScreen}.
+
+\subsection{AdminUsersScreen — Cabin Assignment}
+
+Lists every registered user with avatar (initials), role and assigned-cabin
+chips. Tapping \textbf{Assign} opens a bottom-sheet modal that multi-selects
+cabins; on save, cabin ids are converted back to room ids
+(\code{cabin-1} $\rightarrow$ \code{r1}) and persisted via
+\code{assignUserRooms}, with the local list updated optimistically. It re-fetches
+when its \code{refreshKey} prop changes (driven by Settings actions).
+
+%==============================================================================
+\section{Reusable Components}
+%==============================================================================
+
+\begin{longtable}{@{}p{0.27\textwidth}p{0.67\textwidth}@{}}
+  \toprule
+  \textbf{Component} & \textbf{Responsibility} \\
+  \midrule
+  \endhead
+  \code{GlassCard}      & Frosted container with border, translucent fill and a
+                          1px top highlight; \code{highlighted} accents active
+                          cards. \\
+  \code{CabinCard}      & Per-cabin tile: number badge, name, active/idle status,
+                          light \& fan rows with toggles. Memoised; icons "pulse"
+                          on state change; press provides a scale animation. \\
+  \code{DraggableCabinGrid} & 2-column sortable grid using Gesture Handler +
+                          Reanimated. Long-press lifts a card (with haptic),
+                          reorders via absolute positioning, and reports the new
+                          order. Freezes page scroll while dragging. \\
+  \code{ExpandedCabinModal} & Enlarged single-cabin view with larger toggles and
+                          inline rename (when permitted). \\
+  \code{MasterControl}  & Three bulk buttons. "All Off" is a hold-to-confirm
+                          (2\,s) action with an animated progress fill and strong
+                          haptic on confirm, guarding against accidental taps. \\
+  \code{ToggleSwitch}   & Animated on/off switch (\code{sm}/\code{md}) with spring
+                          thumb travel, colour cross-fade and a glow dot. \\
+  \code{BottomNav}      & Custom pill navigation bar; role-filtered tabs, animated
+                          active indicator, filled icon + label on selection. \\
+  \code{Header}         & Home header: greeting, theme toggle, logout, an info
+                          button (opens Acknowledgements) and a device/cabin
+                          stats row. \\
+  \code{WheelTimePicker}& iOS-alarm-style scroll wheels (hour/minute/AM-PM) with
+                          fade + scale falloff, snapping and selection haptics. \\
+  \code{LogsChart}      & Dependency-free line chart (average + dashed peak
+                          series) drawn with rotated \code{View} segments, an area
+                          fill, gridlines, tap tooltips and a legend. \\
+  \code{ChangePasswordModal} & Admin password-reset sheet calling
+                          \code{changePassword}. \\
+  \code{AcknowledgementsModal} & Full-screen credits page (project info,
+                          contributors with avatars/LinkedIn, supervisor). \\
+  \code{FadeInView}     & Mount-triggered fade + slide-up wrapper used app-wide
+                          for staggered entrances. \\
+  \code{Loader}         & Branded spinner with pulsing glow and rotating
+                          status lines. \\
+  \bottomrule
+\end{longtable}
+
+\subsection{Notable Component Patterns}
+
+\paragraph{Hold-to-confirm (\texttt{MasterControl}).} The destructive "All Off"
+button must be pressed for 2 seconds. A short vibration acknowledges the press,
+an animated fill tracks hold progress, and a strong buzz plus warning haptic
+fire on confirm. A quick tap only shows a "Hold 2s" hint — accidental taps
+cannot trigger it.
+
+\paragraph{Draggable grid worklets.} \code{DraggableCabinGrid} performs its
+layout math (\code{getPosition}, \code{getOrder}) inside Reanimated worklets on
+the UI thread, keeping dragging at 60\,fps. A shared \code{positions} map is
+mutated during the gesture; the JS thread is only notified on drop.
+
+\paragraph{No-SVG charting.} Both \code{LogsChart} and the Analytics Gantt draw
+entirely with plain \code{View}s — line segments are thin views rotated by
+\code{atan2} angle — avoiding \code{react-native-svg} and its native build cost.
+
+%==============================================================================
+\section{Cross-Cutting Concerns}
+%==============================================================================
+
+\subsection{State Management}
+
+The app uses \textbf{React Context} for global concerns (auth, theme) and
+\textbf{local component state} for everything else — there is no Redux/MobX. Data
+freshness is achieved through a combination of polling (Home, Analytics) and the
+stale-while-revalidate cache (Logs, chart).
+
+\subsection{Performance Techniques}
+
+\begin{itemize}[leftmargin=1.4em]
+  \item Memoised style factories (\code{useMemo(() => createStyles(colors))}).
+  \item \code{React.memo} on list rows (\code{CabinCard}, log cards).
+  \item Structural sharing in \code{applyCabinUpdate} to skip no-op renders.
+  \item Lazy tab mounting and \code{active}-gated data fetching.
+  \item Tuned \code{FlatList} windowing.
+  \item UI-thread animations via Reanimated worklets and native-driver Animated.
+\end{itemize}
+
+\subsection{Offline and Failure Resilience}
+
+Optimistic updates keep the UI responsive under latency; failed mutations either
+revert (rename, schedule enable) or are reconciled by the next poll (toggles).
+Cached resources continue to display the last-known data when the network is
+unreachable. A \code{401} anywhere triggers a clean, global logout.
+
+\subsection{Accessibility \& UX Details}
+
+Consistent hit areas, haptic feedback on meaningful interactions, theme-aware
+status bars, keyboard-avoiding forms, pull-to-refresh on all lists, and
+staggered entrance animations contribute to a native-feeling experience.
+
+%==============================================================================
+\section{Build \& Configuration}
+%==============================================================================
+
+\begin{longtable}{@{}p{0.30\textwidth}p{0.64\textwidth}@{}}
+  \toprule
+  \textbf{File} & \textbf{Role} \\
+  \midrule
+  \endhead
+  \code{app.json}      & Expo config: name, slug, icons, splash, Android package,
+                         plugins (\code{expo-router}, splash, build-properties),
+                         New Architecture and React Compiler flags. \\
+  \code{eas.json}      & EAS Build/Submit profiles. \\
+  \code{tsconfig.json} & Extends \code{expo/tsconfig.base}, strict mode, \code{@/*}
+                         path alias. \\
+  \code{package.json}  & Scripts: \code{start}, \code{android}, \code{ios},
+                         \code{web}, \code{lint}. \\
+  \bottomrule
+\end{longtable}
+
+\begin{notebox}
+\textbf{Cleartext traffic.} \code{expo-build-properties} enables
+\code{usesCleartextTraffic} on Android so the app can reach a plain-\code{http}
+LAN backend (e.g.\ ESP hardware on the local network). This is appropriate for
+the project's LAN deployment but should be reconsidered for public release.
+\end{notebox}
+
+\subsection{Running the App}
+
+\begin{lstlisting}[language=tsx]
+cd app/SmartOffice
+npm install
+npx expo start        # then press a (Android), i (iOS), or w (web)
+\end{lstlisting}
+
+At first launch, open \textbf{Server settings} on the login screen and point the
+app at the backend (default \code{http://192.168.0.127:8000}), then sign in with
+the admin account or a provisioned user.
+
+%==============================================================================
+\section{Conclusion}
+%==============================================================================
+
+The Nestboard front-end is a cohesive, single-codebase React Native application
+that delivers real-time room automation with a refined, theme-aware interface.
+Its architecture cleanly separates routing, global state, a typed networking
+layer and a reusable component library. Careful attention to optimistic updates,
+reconciliation, caching and render minimisation gives it a responsive feel even
+over an intermittent LAN link to embedded hardware. The result is a
+maintainable, extensible client suitable both as a course deliverable and as a
+foundation for further development.
+
+\vspace{1cm}
+\begin{center}
+\color{muted}\small — End of Document —
+\end{center}
+
+\end{document}

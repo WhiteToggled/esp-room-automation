@@ -6,7 +6,8 @@ export async function pingHealth(): Promise<{ status: string }> {
 
 export interface Schedule {
   id: number;
-  device_id: string;
+  // A single schedule targets one or more devices, all sharing the same time/days/action.
+  device_ids: string[];
   action: number;
   hour: number;
   minute: number;
@@ -16,8 +17,18 @@ export interface Schedule {
   created_at: string;
 }
 
-export type ScheduleCreate = Omit<Schedule, 'id' | 'created_by' | 'created_at'>;
-export type ScheduleUpdate = Partial<Omit<Schedule, 'id' | 'device_id' | 'created_by' | 'created_at'>>;
+// Creation targets one or more devices at once; the server creates a single
+// Schedule holding them all and returns it as a one-element array.
+export interface ScheduleCreate {
+  device_ids: string[];
+  action: number;
+  hour: number;
+  minute: number;
+  days: string[];
+  enabled: boolean;
+}
+// device_ids cannot be changed after creation, so it's excluded from updates.
+export type ScheduleUpdate = Partial<Omit<Schedule, 'id' | 'device_ids' | 'created_by' | 'created_at'>>;
 
 // GET /states now returns device states plus a room-prefix → display-name map.
 // `names` only includes rooms the caller is allowed to see (all rooms for admin).
@@ -51,8 +62,24 @@ export async function renameRoom(roomId: string, name: string): Promise<Room> {
   return client.put(`/rooms/${encodeURIComponent(roomId)}`, { name });
 }
 
-export async function toggle(deviceId: string) {
-  return client.post(`/toggle/${encodeURIComponent(deviceId)}`, {});
+// Response from POST /set/{device_id}. `affected_ids` lists every device the
+// server changed — more than one when the device belongs to a group (e.g.
+// toggling room1/l1 also switches its grouped siblings).
+export interface SetResponse {
+  id: string;
+  new_state: 0 | 1;
+  affected_ids: string[];
+}
+
+// Set a device to an explicit state (1 = on, 0 = off). Replaces the old
+// /toggle endpoint, which flipped whatever state the server currently held.
+export async function setDevice(deviceId: string, state: 0 | 1): Promise<SetResponse> {
+  return client.post(`/set/${encodeURIComponent(deviceId)}?state=${state}`, {});
+}
+
+// Set every device the caller can see to an explicit state. Admin only.
+export async function setAll(state: 0 | 1): Promise<{ message: string; count: number; new_state: 0 | 1 }> {
+  return client.post(`/set-all?state=${state}`, {});
 }
 
 export async function lightsOn() {
@@ -103,16 +130,34 @@ export async function assignUserRooms(username: string, rooms: string[]): Promis
   return client.put(`/users/${encodeURIComponent(username)}/rooms`, { rooms });
 }
 
-export async function listSchedules(): Promise<Schedule[]> {
-  return client.get('/schedules');
+// Guarantee device_ids is always a string[] so the UI never crashes on a missing
+// field. Tolerates a backend that still sends the legacy singular `device_id`.
+function normalizeSchedule(raw: any): Schedule {
+  const ids: string[] = Array.isArray(raw?.device_ids)
+    ? raw.device_ids
+    : raw?.device_id != null
+      ? [raw.device_id]
+      : [];
+  return { ...raw, device_ids: ids };
 }
 
-export async function createSchedule(data: ScheduleCreate): Promise<Schedule> {
-  return client.post('/schedules', data);
+export async function listSchedules(): Promise<Schedule[]> {
+  const data = await client.get('/schedules');
+  return Array.isArray(data) ? data.map(normalizeSchedule) : [];
+}
+
+// Returns the created Schedule as a one-element array. Validation is
+// all-or-nothing: if any device is invalid/forbidden the server creates none.
+export async function createSchedule(data: ScheduleCreate): Promise<Schedule[]> {
+  const created = await client.post('/schedules', data);
+  // Tolerate either an array (per the API) or a bare object.
+  const arr = Array.isArray(created) ? created : created ? [created] : [];
+  return arr.map(normalizeSchedule);
 }
 
 export async function updateSchedule(id: number, data: ScheduleUpdate): Promise<Schedule> {
-  return client.put(`/schedules/${id}`, data);
+  const updated = await client.put(`/schedules/${id}`, data);
+  return normalizeSchedule(updated);
 }
 
 export async function deleteSchedule(id: number): Promise<void> {

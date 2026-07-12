@@ -1,10 +1,14 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 
 import { SPACING, RADIUS, ThemeColors } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import * as api from '../api/devices';
 import { LogBucket, LogRangePeriod } from '../api/devices';
+import { useCachedResource } from '../hooks/useCachedResource';
+
+// Chart buckets change slowly; cache per range and only revalidate when stale.
+const RANGE_TTL = 60_000;
 
 const CHART_HEIGHT = 200;
 const GRID_LINES = [1, 0.75, 0.5, 0.25, 0];
@@ -110,30 +114,17 @@ const LogsChart: React.FC<LogsChartProps> = ({ isActive }) => {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [period, setPeriod] = useState<LogRangePeriod>('week');
-  const [buckets, setBuckets] = useState<LogBucket[]>([]);
-  const [loading, setLoading] = useState(true);
   const [chartWidth, setChartWidth] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
 
-  const fetchData = useCallback(async (p: LogRangePeriod) => {
-    setLoading(true);
-    try {
-      const data = await api.getLogsRange(p);
-      setBuckets(data);
-    } catch (_) {
-      setBuckets([]);
-    }
-    setLoading(false);
-  }, []);
+  const { data: buckets, loading } = useCachedResource<LogBucket[]>(
+    `logs:range:${period}`,
+    () => api.getLogsRange(period),
+    { ttlMs: RANGE_TTL, initialData: [], active: isActive ?? true },
+  );
 
-  useEffect(() => {
-    setSelected(null);
-    fetchData(period);
-  }, [period, fetchData]);
-
-  useEffect(() => {
-    if (isActive) fetchData(period);
-  }, [isActive, period, fetchData]);
+  // Clear any tapped point when the range changes.
+  useEffect(() => { setSelected(null); }, [period]);
 
   const totalDevices = useMemo(
     () => Math.max(1, ...buckets.map((b) => b.total), 1),

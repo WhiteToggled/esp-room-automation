@@ -24,6 +24,7 @@ import { Cabin, INITIAL_CABINS } from '../constants/cabinData';
 import * as devicesApi from '../api/devices';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { getBiometricCapability, isEnrolledLocally } from '../api/biometric';
 import Header from '../components/Header';
 import Loader from '../components/Loader';
 import DraggableCabinGrid from '../components/DraggableCabinGrid';
@@ -50,7 +51,7 @@ const tabOffset = (tab: TabName, isAdmin: boolean): number =>
   (isAdmin ? ADMIN_OFFSETS : USER_OFFSETS)[tab];
 
 const HomeScreen: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, enableBiometric } = useAuth();
   const { colors, theme } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [cabins, setCabins] = useState<Cabin[]>(INITIAL_CABINS);
@@ -73,6 +74,46 @@ const HomeScreen: React.FC = () => {
   useEffect(() => {
     setVisitedTabs((prev) => (prev.has(activeTab) ? prev : new Set(prev).add(activeTab)));
   }, [activeTab]);
+
+  // One-time nudge, per user, to set up biometric login after a password sign-in.
+  // Only shown when the device supports biometrics and isn't already enrolled.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      const dismissKey = `nestboard_bio_prompted_${user.id}`;
+      const [prompted, cap, enrolled] = await Promise.all([
+        AsyncStorage.getItem(dismissKey),
+        getBiometricCapability(),
+        isEnrolledLocally(),
+      ]);
+      if (cancelled || prompted || enrolled || !cap.available) return;
+      // Mark shown up front so a re-render can't stack a second alert.
+      await AsyncStorage.setItem(dismissKey, '1');
+      Alert.alert(
+        `Enable ${cap.label} login?`,
+        `Sign in faster next time using ${cap.label} on this device.`,
+        [
+          { text: 'Not now', style: 'cancel' },
+          {
+            text: 'Enable',
+            onPress: async () => {
+              const res = await enableBiometric();
+              Alert.alert(
+                res.success ? 'All set' : 'Could not enable',
+                res.success
+                  ? `${cap.label} login is now enabled on this device.`
+                  : res.error || 'Please try again from this device.',
+              );
+            },
+          },
+        ],
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, enableBiometric]);
 
   // Ordered list of tabs visible to this user — used for swipe navigation
   const visibleTabs: TabName[] = isAdmin
@@ -219,7 +260,7 @@ const HomeScreen: React.FC = () => {
     applyCabinUpdate((c) => (c.id === cabinId ? { ...c, light: { ...c.light, isOn: !c.light.isOn } } : c));
     if (topic) {
       markPending(topic, nextOn);
-      devicesApi.toggle(topic).catch(async () => {
+      devicesApi.setDevice(topic, nextOn ? 1 : 0).catch(async () => {
         delete pendingRef.current[topic]; // request failed — let reconcile correct us
         try {
           const states = await devicesApi.getStates();
@@ -236,7 +277,7 @@ const HomeScreen: React.FC = () => {
     applyCabinUpdate((c) => (c.id === cabinId ? { ...c, fan: { ...c.fan, isOn: !c.fan.isOn } } : c));
     if (topic) {
       markPending(topic, nextOn);
-      devicesApi.toggle(topic).catch(async () => {
+      devicesApi.setDevice(topic, nextOn ? 1 : 0).catch(async () => {
         delete pendingRef.current[topic];
         try {
           const states = await devicesApi.getStates();

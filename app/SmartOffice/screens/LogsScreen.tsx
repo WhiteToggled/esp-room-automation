@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import React, { useState, useCallback, useMemo, memo } from 'react';
 import {
   View,
   Text,
@@ -16,8 +16,13 @@ import { SPACING, RADIUS, ThemeColors } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import * as api from '../api/devices';
 import { StateLogEntry } from '../api/devices';
+import { useCachedResource } from '../hooks/useCachedResource';
 import LogsChart from '../components/LogsChart';
 import FadeInView from '../components/FadeInView';
+
+// Logs are read-heavy and rarely change between quick tab switches, so serve a
+// cached copy and only revalidate over the network once it's older than this.
+const LOGS_TTL = 30_000;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -131,40 +136,28 @@ interface LogsScreenProps {
 const LogsScreen: React.FC<LogsScreenProps> = ({ isActive }) => {
   const { colors, theme } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const [logs, setLogs] = useState<StateLogEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [capturing, setCapturing] = useState(false);
 
-  const fetchLogs = useCallback(async () => {
-    try {
-      const data = await api.getLogs(100);
-      setLogs(data);
-    } catch (_) {}
-  }, []);
-
-  useEffect(() => {
-    fetchLogs().finally(() => setLoading(false));
-  }, [fetchLogs]);
-
-  useEffect(() => {
-    if (isActive) fetchLogs();
-  }, [isActive, fetchLogs]);
-
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await fetchLogs();
-    setRefreshing(false);
-  }, [fetchLogs]);
+  const {
+    data: logs,
+    loading,
+    refreshing,
+    refresh: handleRefresh,
+    reload,
+  } = useCachedResource<StateLogEntry[]>(
+    'logs:list:100',
+    () => api.getLogs(100),
+    { ttlMs: LOGS_TTL, initialData: [], active: isActive ?? true },
+  );
 
   const handleCapture = useCallback(async () => {
     setCapturing(true);
     try {
       await api.triggerLog();
-      await fetchLogs();
+      await reload(); // new snapshot — force the cache to update
     } catch (_) {}
     setCapturing(false);
-  }, [fetchLogs]);
+  }, [reload]);
 
   const renderItem = useCallback(
     ({ item, index }: { item: StateLogEntry; index: number }) => (

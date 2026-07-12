@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { SPACING, RADIUS, ThemeColors } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { INITIAL_CABINS } from '../constants/cabinData';
-import { listUsers, assignUserRooms } from '../api/devices';
+import { listUsers, assignUserRooms, listRooms, Room } from '../api/devices';
 
 interface BackendUser {
   username: string;
@@ -28,13 +28,21 @@ interface BackendUser {
 const roomToCabinId = (room: string) => `cabin-${room.replace('r', '')}`;
 const cabinIdToRoom = (cabinId: string) => `r${cabinId.replace('cabin-', '')}`;
 
+// A selectable cabin in the assign modal: the stable cabin id plus its current
+// display name (admin-defined, sourced from the backend /rooms list).
+interface CabinOption {
+  id: string;
+  name: string;
+}
+
 interface AssignModalProps {
   user: BackendUser;
+  cabins: CabinOption[];
   onClose: () => void;
   onSave: (cabinIds: string[]) => Promise<void>;
 }
 
-const AssignModal: React.FC<AssignModalProps> = ({ user, onClose, onSave }) => {
+const AssignModal: React.FC<AssignModalProps> = ({ user, cabins, onClose, onSave }) => {
   const { colors } = useTheme();
   const modal = useMemo(() => createModalStyles(colors), [colors]);
   const [selected, setSelected] = useState<Set<string>>(
@@ -77,7 +85,7 @@ const AssignModal: React.FC<AssignModalProps> = ({ user, onClose, onSave }) => {
             style={modal.list}
             contentContainerStyle={{ paddingVertical: SPACING.sm }}
           >
-            {INITIAL_CABINS.map((cabin) => {
+            {cabins.map((cabin) => {
               const isActive = selected.has(cabin.id);
               return (
                 <TouchableOpacity
@@ -143,6 +151,7 @@ const AdminUsersScreen: React.FC<AdminUsersScreenProps> = ({ refreshKey }) => {
   const { colors, theme } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [users, setUsers] = useState<BackendUser[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [selectedUser, setSelectedUser] = useState<BackendUser | null>(null);
 
   const fetchUsers = useCallback(async () => {
@@ -150,9 +159,39 @@ const AdminUsersScreen: React.FC<AdminUsersScreenProps> = ({ refreshKey }) => {
       const data = await listUsers();
       setUsers(data);
     } catch (_) {}
+    // Room display names (admin-defined) so assignments show the real cabin
+    // names rather than the generic "Cabin N" defaults.
+    try {
+      const roomList = await listRooms();
+      setRooms(roomList);
+    } catch (_) {}
   }, []);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers, refreshKey]);
+
+  // cabin-id → display name, from the backend room list. Falls back to the
+  // static INITIAL_CABINS name, then the raw id, if a room is missing/unnamed.
+  const cabinNameById = useMemo(() => {
+    const map: Record<string, string> = {};
+    rooms.forEach((r) => {
+      if (r.name) map[roomToCabinId(r.room_id)] = r.name;
+    });
+    return map;
+  }, [rooms]);
+
+  // The full set of selectable cabins for the assign modal, ordered by number.
+  // Prefer the backend room list; fall back to the static defaults before it loads.
+  const cabinOptions = useMemo<CabinOption[]>(() => {
+    if (rooms.length === 0) {
+      return INITIAL_CABINS.map((c) => ({ id: c.id, name: c.name }));
+    }
+    return rooms
+      .map((r) => ({
+        id: roomToCabinId(r.room_id),
+        name: r.name || INITIAL_CABINS.find((c) => c.id === roomToCabinId(r.room_id))?.name || r.room_id,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  }, [rooms]);
 
   const [refreshing, setRefreshing] = useState(false);
   const handleRefresh = useCallback(async () => {
@@ -175,9 +214,14 @@ const AdminUsersScreen: React.FC<AdminUsersScreenProps> = ({ refreshKey }) => {
     setSelectedUser(null);
   };
 
-  const getCabinNames = (rooms: string[]): string[] =>
-    rooms
-      .map((r) => INITIAL_CABINS.find((c) => c.id === roomToCabinId(r))?.name ?? r)
+  const getCabinNames = (userRooms: string[]): string[] =>
+    userRooms
+      .map((r) => {
+        const cabinId = roomToCabinId(r);
+        return cabinNameById[cabinId]
+          ?? INITIAL_CABINS.find((c) => c.id === cabinId)?.name
+          ?? r;
+      })
       .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
   const getInitials = (name: string) =>
@@ -270,6 +314,7 @@ const AdminUsersScreen: React.FC<AdminUsersScreenProps> = ({ refreshKey }) => {
         <AssignModal
           key={selectedUser.username}
           user={selectedUser}
+          cabins={cabinOptions}
           onClose={() => setSelectedUser(null)}
           onSave={handleSave}
         />
