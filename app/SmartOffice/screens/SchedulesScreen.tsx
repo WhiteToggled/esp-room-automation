@@ -49,16 +49,19 @@ const DEFAULT_FORM: ScheduleCreate = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const formatDevice = (id: string) => {
+// `names` maps a room prefix (e.g. "r1") to its admin-defined display name,
+// as returned by GET /states. Falls back to "Room N" when a room is unnamed.
+const formatDevice = (id: string, names: Record<string, string> = {}) => {
   const [room, dev] = id.split('/');
   const num = room?.replace('r', '') ?? '?';
-  return `Room ${num} · ${dev?.startsWith('l') ? 'Light' : 'Fan'}`;
+  const roomLabel = (room && names[room]) || `Room ${num}`;
+  return `${roomLabel} · ${dev?.startsWith('l') ? 'Light' : 'Fan'}`;
 };
 
 // One-line summary for a schedule that may target several devices.
-const summarizeDevices = (ids: string[]) =>
+const summarizeDevices = (ids: string[], names: Record<string, string> = {}) =>
   ids.length === 0 ? 'No devices'
-  : ids.length === 1 ? formatDevice(ids[0])
+  : ids.length === 1 ? formatDevice(ids[0], names)
   : `${ids.length} devices`;
 
 // Icon to represent a device set: bulb if all lights, fan if all fans, grid if mixed.
@@ -99,12 +102,13 @@ interface ScheduleFormProps {
   initial: ScheduleCreate;
   editId: number | null;
   availableDevices: string[];
+  roomNames: Record<string, string>;
   onSave: (form: ScheduleCreate, editId: number | null) => Promise<void>;
   onClose: () => void;
 }
 
 const ScheduleFormModal: React.FC<ScheduleFormProps> = ({
-  visible, initial, editId, availableDevices, onSave, onClose,
+  visible, initial, editId, availableDevices, roomNames, onSave, onClose,
 }) => {
   const { colors } = useTheme();
   const fm = useMemo(() => createFmStyles(colors), [colors]);
@@ -154,7 +158,7 @@ const ScheduleFormModal: React.FC<ScheduleFormProps> = ({
   const editAllLight = form.device_ids.length > 0 && form.device_ids.every((id) => id.includes('/l'));
   const deviceSummary =
     form.device_ids.length === 0 ? 'Select devices'
-    : form.device_ids.length === 1 ? formatDevice(form.device_ids[0])
+    : form.device_ids.length === 1 ? formatDevice(form.device_ids[0], roomNames)
     : `${form.device_ids.length} devices selected`;
 
   return (
@@ -196,10 +200,10 @@ const ScheduleFormModal: React.FC<ScheduleFormProps> = ({
                   />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={fm.deviceName}>{summarizeDevices(form.device_ids)}</Text>
+                  <Text style={fm.deviceName}>{summarizeDevices(form.device_ids, roomNames)}</Text>
                   <Text style={fm.deviceSub}>
                     {form.device_ids.length > 1
-                      ? form.device_ids.map(formatDevice).join(', ')
+                      ? form.device_ids.map((id) => formatDevice(id, roomNames)).join(', ')
                       : 'Device can’t be changed'}
                   </Text>
                 </View>
@@ -262,7 +266,7 @@ const ScheduleFormModal: React.FC<ScheduleFormProps> = ({
                           </View>
                           <View style={{ flex: 1 }}>
                             <Text style={[fm.deviceOptionName, active && fm.deviceOptionNameActive]}>
-                              {formatDevice(id)}
+                              {formatDevice(id, roomNames)}
                             </Text>
                             <Text style={fm.deviceOptionId}>{id}</Text>
                           </View>
@@ -488,12 +492,13 @@ const createFmStyles = (colors: ThemeColors) => StyleSheet.create({
 interface ScheduleCardProps {
   schedule: Schedule;
   index: number;
+  roomNames: Record<string, string>;
   onEdit: () => void;
   onDelete: () => void;
   onToggleEnabled: (v: boolean) => void;
 }
 
-const ScheduleCard: React.FC<ScheduleCardProps> = ({ schedule, index, onEdit, onDelete, onToggleEnabled }) => {
+const ScheduleCard: React.FC<ScheduleCardProps> = ({ schedule, index, roomNames, onEdit, onDelete, onToggleEnabled }) => {
   const { colors } = useTheme();
   const sc = useMemo(() => createScStyles(colors), [colors]);
   const isLight = schedule.device_ids.every((id) => id.includes('/l'));
@@ -529,7 +534,7 @@ const ScheduleCard: React.FC<ScheduleCardProps> = ({ schedule, index, onEdit, on
             color={isLight ? colors.accent : colors.blue}
           />
         </View>
-        <Text style={sc.deviceText}>{summarizeDevices(schedule.device_ids)}</Text>
+        <Text style={sc.deviceText}>{summarizeDevices(schedule.device_ids, roomNames)}</Text>
       </View>
 
       {/* Row 3: day chips */}
@@ -616,6 +621,9 @@ const SchedulesScreen: React.FC = () => {
   // The real devices the backend knows about. Sourced from /states so the picker
   // never offers a device that doesn't exist (which would fail schedule creation).
   const [knownDevices, setKnownDevices] = useState<string[]>(ALL_DEVICES);
+  // Room-prefix → display-name map (from /states) so device labels show the
+  // admin-defined room names instead of the generic "Room N".
+  const [roomNames, setRoomNames] = useState<Record<string, string>>({});
 
   const assignedCabinIds = user?.assignedCabinIds ?? [];
   const availableDevices = useMemo(() => {
@@ -638,9 +646,10 @@ const SchedulesScreen: React.FC = () => {
     // Refresh the real device set from the backend. Keys of /states are the
     // actual device ids (e.g. "r1/l1"); only these can be scheduled.
     try {
-      const { states } = await api.getStates();
+      const { states, names } = await api.getStates();
       const ids = Object.keys(states).filter((k) => k.includes('/l') || k.includes('/f'));
       if (ids.length) setKnownDevices(sortDeviceIds(ids));
+      setRoomNames(names ?? {});
     } catch (_) {}
     setLoading(false);
   }, []);
@@ -764,6 +773,7 @@ const SchedulesScreen: React.FC = () => {
               <ScheduleCard
                 schedule={item}
                 index={index}
+                roomNames={roomNames}
                 onEdit={() => openEdit(item)}
                 onDelete={() => handleDelete(item.id)}
                 onToggleEnabled={(v) => handleToggleEnabled(item, v)}
@@ -783,6 +793,7 @@ const SchedulesScreen: React.FC = () => {
         initial={formInitial}
         editId={editTarget?.id ?? null}
         availableDevices={availableDevices.length > 0 ? availableDevices : ALL_DEVICES}
+        roomNames={roomNames}
         onSave={handleSave}
         onClose={() => { setFormVisible(false); setEditTarget(null); }}
       />

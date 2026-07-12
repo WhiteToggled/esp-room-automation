@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { getLogs, triggerLog } from '../api/devices';
+import { getLogs, triggerLog, getStates } from '../api/devices';
 import { RADIUS, SPACING, ThemeColors } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 
@@ -104,7 +104,10 @@ function groupByRoom<T extends { id: string }>(items: T[]): Record<string, T[]> 
   return groups;
 }
 
-function roomLabel(room: string) {
+// `names` maps a room prefix (e.g. "r1") to its admin-defined display name.
+// Falls back to "Room N" when the room has no custom name.
+function roomLabel(room: string, names: Record<string, string> = {}) {
+  if (names[room]) return names[room];
   const n = room.replace(/\D/g, '');
   return n ? `Room ${n}` : room;
 }
@@ -367,6 +370,9 @@ export default function AnalyticsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<Range>('6h');
   const [selectedDevices, setSelectedDevices] = useState<Set<string>>(new Set());
+  // Room-prefix → display-name map (from /states) so room headers show the
+  // admin-defined names instead of the generic "Room N".
+  const [roomNames, setRoomNames] = useState<Record<string, string>>({});
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchLogs = useCallback(async (silent = false) => {
@@ -375,6 +381,9 @@ export default function AnalyticsScreen() {
     try {
       const data: LogEntry[] = await getLogs(500);
       setLogs(data);
+      // Room display names are cheap and change rarely; refresh them alongside
+      // the logs. Non-fatal — a failure just leaves the "Room N" fallback.
+      getStates().then(({ names }) => setRoomNames(names ?? {})).catch(() => {});
       setSelectedDevices((prev) => {
         if (prev.size > 0) return prev;
         const ids = new Set<string>();
@@ -475,7 +484,7 @@ export default function AnalyticsScreen() {
             <View key={room} style={vx.card}>
               <View style={vx.roomHeader}>
                 <View style={vx.roomDot} />
-                <Text style={tx.cardTitle}>{roomLabel(room)}</Text>
+                <Text style={tx.cardTitle}>{roomLabel(room, roomNames)}</Text>
                 <TouchableOpacity
                   onPress={() => {
                     const allSelected = roomStats.every((s) => selectedDevices.has(s.id));
