@@ -9,7 +9,10 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Nestboard uses Face ID to log you in securely."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -46,6 +49,18 @@
           "android": {
             "usesCleartextTraffic": true
           }
+        }
+      ],
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": "Nestboard uses Face ID to unlock your login key."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Nestboard uses Face ID to log you in securely."
         }
       ]
     ],

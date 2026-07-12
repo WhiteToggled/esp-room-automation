@@ -18,6 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import FadeInView from '../components/FadeInView';
 import { getBaseUrl, setBaseUrl } from '../constants/apiConfig';
+import { getBiometricCapability, isEnrolledLocally } from '../api/biometric';
 
 const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -31,7 +32,13 @@ const LoginScreen: React.FC = () => {
   const [serverUrl, setServerUrl] = useState('');
   const [urlSaved, setUrlSaved] = useState(false);
 
-  const { login } = useAuth();
+  // Biometric sign-in: only offered when this device has a key enrolled and the
+  // OS reports usable biometric hardware.
+  const [bioReady, setBioReady] = useState(false);
+  const [bioLabel, setBioLabel] = useState('Biometrics');
+  const [bioLoading, setBioLoading] = useState(false);
+
+  const { login, biometricLogin } = useAuth();
   const { colors, theme } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -39,6 +46,33 @@ const LoginScreen: React.FC = () => {
   useEffect(() => {
     getBaseUrl().then(setServerUrl).catch(() => {});
   }, []);
+
+  // Decide whether to show the biometric button.
+  useEffect(() => {
+    (async () => {
+      try {
+        const [cap, enrolled] = await Promise.all([
+          getBiometricCapability(),
+          isEnrolledLocally(),
+        ]);
+        setBioLabel(cap.label);
+        setBioReady(cap.available && enrolled);
+      } catch {
+        setBioReady(false);
+      }
+    })();
+  }, []);
+
+  const handleBiometricLogin = async () => {
+    setError('');
+    setBioLoading(true);
+    const result = await biometricLogin();
+    setBioLoading(false);
+    if (!result.success && !result.cancelled) {
+      setError(result.error || 'Biometric login failed.');
+    }
+    // On success, navigation is handled by _layout on user state change.
+  };
 
   const handleSaveUrl = async () => {
     const normalized = await setBaseUrl(serverUrl);
@@ -164,6 +198,36 @@ const LoginScreen: React.FC = () => {
                 )}
               </TouchableOpacity>
 
+              {/* Biometric sign-in */}
+              {bioReady && (
+                <>
+                  <View style={styles.dividerRow}>
+                    <View style={styles.dividerLine} />
+                    <Text style={styles.dividerText}>or</Text>
+                    <View style={styles.dividerLine} />
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.bioBtn, bioLoading && styles.btnDisabled]}
+                    onPress={handleBiometricLogin}
+                    activeOpacity={0.8}
+                    disabled={bioLoading}
+                  >
+                    {bioLoading ? (
+                      <ActivityIndicator color={colors.accent} size="small" />
+                    ) : (
+                      <>
+                        <Ionicons
+                          name={bioLabel === 'Face ID' ? 'scan-outline' : 'finger-print-outline'}
+                          size={20}
+                          color={colors.accent}
+                        />
+                        <Text style={styles.bioBtnText}>Sign in with {bioLabel}</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
+
               <Text style={styles.adminHint}>Contact your admin for account access.</Text>
 
               {/* Server URL config */}
@@ -279,6 +343,18 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   btnDisabled: { opacity: 0.6 },
   signInText: { color: '#fff', fontSize: 16, fontWeight: '600', marginRight: SPACING.xs },
+  dividerRow: {
+    flexDirection: 'row', alignItems: 'center', marginTop: SPACING.lg, marginBottom: SPACING.md,
+  },
+  dividerLine: { flex: 1, height: 1, backgroundColor: colors.glassBorder },
+  dividerText: { color: colors.textMuted, fontSize: 12, marginHorizontal: SPACING.sm },
+  bioBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs,
+    height: 52, borderRadius: RADIUS.md,
+    borderWidth: 1, borderColor: 'rgba(47,128,237,0.4)',
+    backgroundColor: 'rgba(47,128,237,0.08)',
+  },
+  bioBtnText: { color: colors.accent, fontSize: 15, fontWeight: '600' },
   adminHint: {
     color: colors.textMuted, fontSize: 11,
     textAlign: 'center', marginTop: SPACING.lg,

@@ -2,6 +2,11 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient, { setUnauthorizedHandler } from '../api/client';
 import { getBaseUrlSync, TOKEN_KEY } from '../constants/apiConfig';
+import {
+  biometricLogin as bioLogin,
+  enrollBiometric,
+  disableBiometric,
+} from '../api/biometric';
 
 export interface AppUser {
   id: string;
@@ -23,6 +28,13 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   signup: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  // Sign in on this device using the enrolled biometric key. `cancelled` is set
+  // when the user simply dismisses the Face ID / fingerprint prompt.
+  biometricLogin: () => Promise<{ success: boolean; error?: string; cancelled?: boolean }>;
+  // Enroll the currently logged-in user for biometric login on this device.
+  enableBiometric: () => Promise<{ success: boolean; error?: string }>;
+  // Remove biometric login from this device.
+  disableBiometric: () => Promise<void>;
 }
 
 const ADMIN: AppUser = {
@@ -43,6 +55,9 @@ const AuthContext = createContext<AuthContextValue>({
   login: async () => ({ success: false }),
   logout: async () => {},
   signup: async () => ({ success: false }),
+  biometricLogin: async () => ({ success: false }),
+  enableBiometric: async () => ({ success: false }),
+  disableBiometric: async () => {},
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -144,6 +159,64 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
+  // Sign in with the device's enrolled biometric key. Mirrors `login`'s side
+  // effects (persist token + session, set user) on success.
+  const biometricLogin = async (): Promise<{ success: boolean; error?: string; cancelled?: boolean }> => {
+    try {
+      const resp = await bioLogin();
+      const username = resp.username;
+      const role = resp.role ?? 'user';
+      const rooms: string[] = resp.rooms ?? [];
+      await AsyncStorage.setItem(TOKEN_STORAGE_KEY, resp.access_token);
+      await AsyncStorage.setItem(SESSION_KEY, username);
+      setUser({
+        id: username,
+        name: username,
+        email: username,
+        password: '',
+        role: role === 'admin' ? 'admin' : 'user',
+        assignedCabinIds: roomsToCabinIds(rooms),
+      });
+      return { success: true };
+    } catch (e: any) {
+      // Server replied non-2xx.
+      if (e instanceof Response) {
+        if (e.status === 404) {
+          return { success: false, error: 'Biometric login isn’t set up for this device. Log in with your password to enable it.' };
+        }
+        let detail = '';
+        try {
+          detail = (await e.json())?.detail || '';
+        } catch (_) {}
+        return { success: false, error: detail || `Verification failed (${e.status}).` };
+      }
+      // A dismissed/failed Face ID or fingerprint prompt — not a real error.
+      const msg = String(e?.message || '');
+      if (/cancel|user_cancel|authentication was canceled|dismiss/i.test(msg)) {
+        return { success: false, cancelled: true };
+      }
+      return { success: false, error: msg || 'Biometric login failed.' };
+    }
+  };
+
+  // Enroll the current user on this device (requires an active session/token).
+  const enableBiometric = async (): Promise<{ success: boolean; error?: string }> => {
+    if (!user) return { success: false, error: 'Please log in first.' };
+    try {
+      await enrollBiometric(user.id);
+      return { success: true };
+    } catch (e: any) {
+      if (e instanceof Response) {
+        let detail = '';
+        try {
+          detail = (await e.json())?.detail || '';
+        } catch (_) {}
+        return { success: false, error: detail || `Couldn’t register key (${e.status}).` };
+      }
+      return { success: false, error: e?.message || 'Could not enable biometric login.' };
+    }
+  };
+
   const signup = async (
     name: string,
     email: string,
@@ -177,7 +250,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, signup }}>
+    <AuthContext.Provider
+      value={{ user, loading, login, logout, signup, biometricLogin, enableBiometric, disableBiometric }}
+    >
       {children}
     </AuthContext.Provider>
   );
