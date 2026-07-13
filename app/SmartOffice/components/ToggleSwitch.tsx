@@ -11,9 +11,11 @@ interface ToggleSwitchProps {
   isOn: boolean;
   onToggle: () => void;
   size?: 'sm' | 'md';
+  // When true the switch is inert (offline device) and rendered dimmed.
+  disabled?: boolean;
 }
 
-const ToggleSwitch: React.FC<ToggleSwitchProps> = ({ isOn, onToggle, size = 'md' }) => {
+const ToggleSwitch: React.FC<ToggleSwitchProps> = ({ isOn, onToggle, size = 'md', disabled = false }) => {
   const { colors } = useTheme();
   const translateX = useRef(new Animated.Value(isOn ? 1 : 0)).current;
   const bgOpacity = useRef(new Animated.Value(isOn ? 1 : 0)).current;
@@ -42,6 +44,7 @@ const ToggleSwitch: React.FC<ToggleSwitchProps> = ({ isOn, onToggle, size = 'md'
   }, [isOn]);
 
   const handlePress = () => {
+    if (disabled) return;
     Animated.sequence([
       Animated.timing(thumbScale, { toValue: 0.85, duration: 80, useNativeDriver: true }),
       Animated.timing(thumbScale, { toValue: 1, duration: 120, useNativeDriver: true }),
@@ -55,11 +58,12 @@ const ToggleSwitch: React.FC<ToggleSwitchProps> = ({ isOn, onToggle, size = 'md'
   });
 
   return (
-    <TouchableOpacity onPress={handlePress} activeOpacity={0.9}>
+    <TouchableOpacity onPress={handlePress} activeOpacity={disabled ? 1 : 0.9} disabled={disabled}>
       <Animated.View
         style={[
           styles.track,
           { width: trackW, height: trackH, borderRadius: trackH / 2, backgroundColor: bgColor },
+          disabled && styles.disabled,
         ]}
       >
         <Animated.View
@@ -87,6 +91,9 @@ const styles = StyleSheet.create({
   track: {
     justifyContent: 'center',
     position: 'relative',
+  },
+  disabled: {
+    opacity: 0.4,
   },
   thumb: {
     position: 'absolute',

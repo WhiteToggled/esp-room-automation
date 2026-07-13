@@ -2,6 +2,9 @@ export interface CabinDevice {
   id: string;
   label: string;
   isOn: boolean;
+  // Whether the device's nestboard is reporting in. Seeded true and refreshed
+  // from the /states `activity` map on each poll; false means unreachable.
+  isOnline: boolean;
   topic?: string; // optional backend MQTT topic mapping (e.g. 'r1/l1')
 }
 
@@ -21,6 +24,7 @@ export const INITIAL_CABINS: Cabin[] = Array.from({ length: 6 }, (_, i) => ({
     id: `light-${i + 1}`,
     label: 'Light',
     isOn: i % 3 === 0, // some on by default
+    isOnline: true,
     // Each cabin light maps to a backend MQTT topic that the server log tracks.
     topic: `r${i + 1}/l1`,
   },
@@ -28,6 +32,7 @@ export const INITIAL_CABINS: Cabin[] = Array.from({ length: 6 }, (_, i) => ({
     id: `fan-${i + 1}`,
     label: 'Fan',
     isOn: i % 4 === 1,
+    isOnline: true,
     topic: `r${i + 1}/f1`,
   },
 }));

@@ -28,6 +28,7 @@ import { getBiometricCapability, isEnrolledLocally } from '../api/biometric';
 import Header from '../components/Header';
 import Loader from '../components/Loader';
 import DraggableCabinGrid from '../components/DraggableCabinGrid';
+import CabinCard from '../components/CabinCard';
 import BottomNav, { TabName } from '../components/BottomNav';
 import MasterControl from '../components/MasterControl';
 import ExpandedCabinModal from '../components/ExpandedCabinModal';
@@ -189,18 +190,6 @@ const HomeScreen: React.FC = () => {
     [cabins, isAdmin, assignedCabinIds.join(',')]
   );
 
-  // A non-admin with exactly one assigned cabin gets it opened expanded
-  // automatically (once, after the first data load) so they land straight on
-  // its controls. We don't reopen it after they close it.
-  const autoExpandedRef = useRef(false);
-  useEffect(() => {
-    if (isAdmin || initialLoading || autoExpandedRef.current) return;
-    if (visibleCabins.length === 1) {
-      autoExpandedRef.current = true;
-      setExpandedCabinId(visibleCabins[0].id);
-    }
-  }, [isAdmin, initialLoading, visibleCabins]);
-
   // Kept in sync with `cabins` so the toggle callbacks below can read current
   // state (for the MQTT topic lookup) without depending on `cabins` directly —
   // that keeps their identity stable across polls, which lets CabinCard skip
@@ -328,8 +317,13 @@ const HomeScreen: React.FC = () => {
   }, [applyCabinUpdate, markPending]);
 
   const reconcileStates = useCallback((data: devicesApi.StatesResponse) => {
-    const { states, names } = data;
+    const { states, names, activity } = data;
     const pending = pendingRef.current;
+    // A device is online unless activity explicitly reports 0. A missing key
+    // (older backend, or device not listed) is treated as online so we don't
+    // grey out every control when the field is absent.
+    const resolveOnline = (topic: string | undefined): boolean =>
+      !topic || activity[topic] === undefined ? true : Boolean(activity[topic]);
     // For a device with a pending change, only accept the incoming value once it
     // matches what we expect (then release the lock); otherwise keep the optimistic
     // value so a stale/echoed poll can't flip it back.
@@ -349,13 +343,26 @@ const HomeScreen: React.FC = () => {
     applyCabinUpdate((c) => {
       const lightOn = resolve(c.light.topic, c.light.isOn);
       const fanOn = resolve(c.fan.topic, c.fan.isOn);
+      const lightOnline = resolveOnline(c.light.topic);
+      const fanOnline = resolveOnline(c.fan.topic);
       // Server-provided room name wins; an unnamed room comes back as its own
       // id (e.g. "r2"), in which case we keep the friendly default label.
       const roomId = `r${c.number}`;
       const serverName = names[roomId];
       const nextName = serverName && serverName !== roomId ? serverName : c.name;
-      if (lightOn === c.light.isOn && fanOn === c.fan.isOn && nextName === c.name) return c;
-      return { ...c, name: nextName, light: { ...c.light, isOn: lightOn }, fan: { ...c.fan, isOn: fanOn } };
+      if (
+        lightOn === c.light.isOn &&
+        fanOn === c.fan.isOn &&
+        lightOnline === c.light.isOnline &&
+        fanOnline === c.fan.isOnline &&
+        nextName === c.name
+      ) return c;
+      return {
+        ...c,
+        name: nextName,
+        light: { ...c.light, isOn: lightOn, isOnline: lightOnline },
+        fan: { ...c.fan, isOn: fanOn, isOnline: fanOnline },
+      };
     });
   }, [applyCabinUpdate]);
 
@@ -457,14 +464,26 @@ const HomeScreen: React.FC = () => {
                     onAllOff={allOff}
                   />
                 )}
-                <DraggableCabinGrid
-                  cabins={visibleCabins}
-                  onReorder={handleReorder}
-                  onDragStateChange={setIsDragging}
-                  onToggleLight={toggleLight}
-                  onToggleFan={toggleFan}
-                  onExpand={setExpandedCabinId}
-                />
+                {visibleCabins.length === 1 ? (
+                  // A single cabin gets a large, full-width card instead of a
+                  // lonely grid cell — no drag/reorder needed for one item.
+                  <CabinCard
+                    large
+                    cabin={visibleCabins[0]}
+                    onToggleLight={toggleLight}
+                    onToggleFan={toggleFan}
+                    onExpand={setExpandedCabinId}
+                  />
+                ) : (
+                  <DraggableCabinGrid
+                    cabins={visibleCabins}
+                    onReorder={handleReorder}
+                    onDragStateChange={setIsDragging}
+                    onToggleLight={toggleLight}
+                    onToggleFan={toggleFan}
+                    onExpand={setExpandedCabinId}
+                  />
+                )}
               </ScrollView>
             )}
           </SafeAreaView>

@@ -19,6 +19,8 @@ import { useTheme } from '../context/ThemeContext';
 interface CabinCardProps {
   cabin: Cabin;
   index?: number;
+  // Renders a bigger, full-width card — used when a user has a single cabin.
+  large?: boolean;
   onToggleLight: (cabinId: string) => void;
   onToggleFan: (cabinId: string) => void;
   onExpand: (cabinId: string) => void;
@@ -46,14 +48,21 @@ const usePulseOnChange = (value: boolean) => {
 const CabinCard: React.FC<CabinCardProps> = ({
   cabin,
   index = 0,
+  large = false,
   onToggleLight,
   onToggleFan,
   onExpand,
 }) => {
   const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(() => createStyles(colors, large), [colors, large]);
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  // Each unreachable device disables its own toggle; the whole cabin is only
+  // greyed out and locked when BOTH devices are offline.
+  const lightOffline = !cabin.light.isOnline;
+  const fanOffline = !cabin.fan.isOnline;
+  const isOffline = lightOffline && fanOffline;
   const isAnyOn = cabin.light.isOn || cabin.fan.isOn;
+  const iconSize = large ? 20 : 14;
 
   const lightPulse = usePulseOnChange(cabin.light.isOn);
   const fanPulse = usePulseOnChange(cabin.fan.isOn);
@@ -79,30 +88,42 @@ const CabinCard: React.FC<CabinCardProps> = ({
   return (
     <FadeInView delay={Math.min(index, 8) * 60} distance={16} style={styles.wrapper}>
       <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-        <GlassCard style={styles.card} highlighted={isAnyOn as boolean}>
+        <GlassCard style={[styles.card, isOffline && styles.cardOffline]} highlighted={(isAnyOn && !isOffline) as boolean}>
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.cabinBadge}>
               <Text style={styles.cabinNumber}>{cabin.number}</Text>
             </View>
 
-            <TouchableOpacity
-              onPress={() => onExpand(cabin.id)}
-              onPressIn={handlePressIn}
-              onPressOut={handlePressOut}
-              style={styles.expandBtn}
-            >
-              <Ionicons name="expand-outline" size={14} color={colors.textSecondary} />
-            </TouchableOpacity>
+            {/* The big single-cabin card shows controls inline, so no expand shortcut. */}
+            {!large && (
+              <TouchableOpacity
+                onPress={() => onExpand(cabin.id)}
+                onPressIn={handlePressIn}
+                onPressOut={handlePressOut}
+                style={styles.expandBtn}
+                // A fully-offline (greyed) cabin can't be opened.
+                disabled={isOffline}
+              >
+                <Ionicons name="expand-outline" size={14} color={colors.textSecondary} />
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Name */}
           <Text style={styles.cabinName}>{cabin.name}</Text>
 
-          {/* Status */}
+          {/* Status — offline (device unreachable) takes precedence over Active/Idle */}
           <View style={styles.statusRow}>
-            <View style={[styles.statusDot, isAnyOn ? styles.statusDotOn : styles.statusDotOff]} />
-            <Text style={styles.statusText}>{isAnyOn ? 'Active' : 'Idle'}</Text>
+            <View
+              style={[
+                styles.statusDot,
+                isOffline ? styles.statusDotOffline : isAnyOn ? styles.statusDotOn : styles.statusDotOff,
+              ]}
+            />
+            <Text style={[styles.statusText, isOffline && styles.statusTextOffline]}>
+              {isOffline ? 'Offline' : isAnyOn ? 'Active' : 'Idle'}
+            </Text>
           </View>
 
           <View style={styles.divider} />
@@ -113,7 +134,7 @@ const CabinCard: React.FC<CabinCardProps> = ({
               <Animated.View style={[styles.iconWrap, cabin.light.isOn && styles.iconWrapOn, { transform: [{ scale: lightPulse }] }]}>
                 <Ionicons
                   name="bulb-outline"
-                  size={14}
+                  size={iconSize}
                   color={cabin.light.isOn ? colors.accent : colors.textMuted}
                 />
               </Animated.View>
@@ -121,16 +142,16 @@ const CabinCard: React.FC<CabinCardProps> = ({
                 Light
               </Text>
             </View>
-            <ToggleSwitch isOn={cabin.light.isOn} onToggle={() => onToggleLight(cabin.id)} size="sm" />
+            <ToggleSwitch isOn={cabin.light.isOn} onToggle={() => onToggleLight(cabin.id)} size={large ? 'md' : 'sm'} disabled={lightOffline} />
           </View>
 
           {/* Fan */}
-          <View style={[styles.deviceRow, { marginTop: SPACING.sm }]}>
+          <View style={[styles.deviceRow, styles.fanRow]}>
             <View style={styles.deviceLeft}>
               <Animated.View style={[styles.iconWrap, cabin.fan.isOn && styles.iconWrapOn, { transform: [{ scale: fanPulse }] }]}>
                 <Ionicons
                   name="sync-outline"
-                  size={14}
+                  size={iconSize}
                   color={cabin.fan.isOn ? colors.accent : colors.textMuted}
                 />
               </Animated.View>
@@ -138,7 +159,7 @@ const CabinCard: React.FC<CabinCardProps> = ({
                 Fan
               </Text>
             </View>
-            <ToggleSwitch isOn={cabin.fan.isOn} onToggle={() => onToggleFan(cabin.id)} size="sm" />
+            <ToggleSwitch isOn={cabin.fan.isOn} onToggle={() => onToggleFan(cabin.id)} size={large ? 'md' : 'sm'} disabled={fanOffline} />
           </View>
         </GlassCard>
       </Animated.View>
@@ -146,9 +167,10 @@ const CabinCard: React.FC<CabinCardProps> = ({
   );
 };
 
-const createStyles = (colors: ThemeColors) => StyleSheet.create<{
+const createStyles = (colors: ThemeColors, large: boolean) => StyleSheet.create<{
   wrapper: ViewStyle;
   card: ViewStyle;
+  cardOffline: ViewStyle;
   header: ViewStyle;
   cabinBadge: ViewStyle;
   cabinNumber: TextStyle;
@@ -158,22 +180,28 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create<{
   statusDot: ViewStyle;
   statusDotOn: ViewStyle;
   statusDotOff: ViewStyle;
+  statusDotOffline: ViewStyle;
   statusText: TextStyle;
+  statusTextOffline: TextStyle;
   divider: ViewStyle;
   deviceRow: ViewStyle;
+  fanRow: ViewStyle;
   deviceLeft: ViewStyle;
   iconWrap: ViewStyle;
   iconWrapOn: ViewStyle;
   deviceLabel: TextStyle;
   deviceLabelOn: TextStyle;
 }>({
-  wrapper: {
-    flex: 1,
-    margin: SPACING.sm / 2,
-  },
+  wrapper: large
+    ? { width: '100%', marginBottom: SPACING.md }
+    : { flex: 1, margin: SPACING.sm / 2 },
   card: {
-    padding: SPACING.md,
-    minHeight: 170,
+    padding: large ? SPACING.xl : SPACING.md,
+    minHeight: large ? 300 : 170,
+  },
+  // Greyed-out treatment when the cabin has an unreachable device.
+  cardOffline: {
+    opacity: 0.45,
   },
   header: {
     flexDirection: 'row',
@@ -181,40 +209,41 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create<{
     alignItems: 'center',
   },
   cabinBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+    width: large ? 40 : 28,
+    height: large ? 40 : 28,
+    borderRadius: large ? 12 : 8,
     backgroundColor: colors.glassHighlight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   cabinNumber: {
     color: colors.textSecondary,
-    fontSize: 11,
+    fontSize: large ? 15 : 11,
     fontWeight: '600',
   },
   expandBtn: {
-    width: 24,
-    height: 24,
+    width: large ? 34 : 24,
+    height: large ? 34 : 24,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 6,
+    borderRadius: large ? 10 : 6,
   },
   cabinName: {
     color: colors.text,
-    fontSize: 15,
-    fontWeight: '600',
-    marginTop: 6,
+    fontSize: large ? 24 : 15,
+    fontWeight: large ? '700' : '600',
+    letterSpacing: large ? -0.5 : 0,
+    marginTop: large ? 10 : 6,
   },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: SPACING.sm,
+    marginVertical: large ? SPACING.md : SPACING.sm,
   },
   statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: large ? 8 : 6,
+    height: large ? 8 : 6,
+    borderRadius: large ? 4 : 3,
     marginRight: 5,
   },
   statusDotOn: {
@@ -223,42 +252,61 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create<{
   statusDotOff: {
     backgroundColor: colors.textMuted,
   },
+  statusDotOffline: {
+    backgroundColor: colors.warning,
+  },
   statusText: {
     color: colors.textMuted,
-    fontSize: 10,
+    fontSize: large ? 11 : 10,
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  statusTextOffline: {
+    color: colors.warning,
   },
   divider: {
     height: 1,
     backgroundColor: colors.glassBorder,
-    marginBottom: SPACING.sm,
+    marginBottom: large ? SPACING.lg : SPACING.sm,
   },
   deviceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    ...(large
+      ? {
+          backgroundColor: colors.glass,
+          borderWidth: 1,
+          borderColor: colors.glassBorder,
+          borderRadius: 12,
+          padding: SPACING.md,
+        }
+      : null),
   },
+  fanRow: { marginTop: large ? SPACING.md : SPACING.sm },
   deviceLeft: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   iconWrap: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    marginRight: 6,
+    width: large ? 34 : 22,
+    height: large ? 34 : 22,
+    borderRadius: large ? 10 : 6,
+    marginRight: large ? 10 : 6,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: large ? 'rgba(255,255,255,0.05)' : 'transparent',
   },
   iconWrapOn: {
     backgroundColor: 'rgba(47,128,237,0.15)',
   },
   deviceLabel: {
     color: colors.textMuted,
-    fontSize: 12,
+    fontSize: large ? 16 : 12,
+    fontWeight: large ? '600' : '400',
   },
   deviceLabelOn: {
-    color: colors.textSecondary,
+    color: large ? colors.text : colors.textSecondary,
   },
 });
 

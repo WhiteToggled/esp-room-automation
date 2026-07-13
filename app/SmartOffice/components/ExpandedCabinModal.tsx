@@ -75,6 +75,11 @@ const ExpandedCabinModal: React.FC<ExpandedCabinModalProps> = ({
   };
 
   const isAnyOn = !!cabin && (cabin.light.isOn || cabin.fan.isOn);
+  // Each unreachable device disables its own toggle; the whole cabin is only
+  // greyed out and locked when both devices are offline. Matches the card.
+  const lightOffline = !!cabin && !cabin.light.isOnline;
+  const fanOffline = !!cabin && !cabin.fan.isOnline;
+  const isOffline = lightOffline && fanOffline;
 
   return (
     <Modal transparent animationType="none" visible={render} onRequestClose={handleClose}>
@@ -83,7 +88,7 @@ const ExpandedCabinModal: React.FC<ExpandedCabinModalProps> = ({
       <Animated.View style={[styles.overlay, { opacity }]}>
         {cabin && (
           <TouchableWithoutFeedback accessible={false} onPress={() => {}}>
-          <Animated.View style={[styles.card, { transform: [{ scale }] }]}>
+          <Animated.View style={[styles.card, isOffline && styles.cardOffline, { transform: [{ scale }] }]}>
             {/* Header */}
             <View style={styles.header}>
               <View style={styles.badge}>
@@ -126,8 +131,15 @@ const ExpandedCabinModal: React.FC<ExpandedCabinModalProps> = ({
               </View>
             )}
             <View style={styles.statusRow}>
-              <View style={[styles.statusDot, isAnyOn ? styles.statusDotOn : styles.statusDotOff]} />
-              <Text style={styles.statusText}>{isAnyOn ? 'Active' : 'Idle'}</Text>
+              <View
+                style={[
+                  styles.statusDot,
+                  isOffline ? styles.statusDotOffline : isAnyOn ? styles.statusDotOn : styles.statusDotOff,
+                ]}
+              />
+              <Text style={[styles.statusText, isOffline && styles.statusTextOffline]}>
+                {isOffline ? 'Offline' : isAnyOn ? 'Active' : 'Idle'}
+              </Text>
             </View>
 
             <View style={styles.divider} />
@@ -144,7 +156,7 @@ const ExpandedCabinModal: React.FC<ExpandedCabinModalProps> = ({
                 </View>
                 <Text style={[styles.deviceLabel, cabin.light.isOn && styles.deviceLabelOn]}>Light</Text>
               </View>
-              <ToggleSwitch isOn={cabin.light.isOn} onToggle={onToggleLight} />
+              <ToggleSwitch isOn={cabin.light.isOn} onToggle={onToggleLight} disabled={lightOffline} />
             </View>
 
             {/* Fan */}
@@ -159,7 +171,7 @@ const ExpandedCabinModal: React.FC<ExpandedCabinModalProps> = ({
                 </View>
                 <Text style={[styles.deviceLabel, cabin.fan.isOn && styles.deviceLabelOn]}>Fan</Text>
               </View>
-              <ToggleSwitch isOn={cabin.fan.isOn} onToggle={onToggleFan} />
+              <ToggleSwitch isOn={cabin.fan.isOn} onToggle={onToggleFan} disabled={fanOffline} />
             </View>
           </Animated.View>
           </TouchableWithoutFeedback>
@@ -187,6 +199,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: RADIUS.xl,
     padding: SPACING.xl,
   },
+  // Greyed-out treatment when the cabin has an unreachable device.
+  cardOffline: { opacity: 0.45 },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -230,7 +244,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   statusDot: { width: 7, height: 7, borderRadius: 3.5, marginRight: 6 },
   statusDotOn: { backgroundColor: colors.accent },
   statusDotOff: { backgroundColor: colors.textMuted },
+  statusDotOffline: { backgroundColor: colors.warning },
   statusText: { color: colors.textMuted, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 },
+  statusTextOffline: { color: colors.warning },
   divider: { height: 1, backgroundColor: colors.glassBorder, marginBottom: SPACING.lg },
   deviceRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
