@@ -18,7 +18,9 @@ SECRET_KEY = os.environ["JWT_SECRET_KEY"]
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
 
-CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
+CORS_ORIGINS = [
+    o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()
+]
 
 VALID_DAYS = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
 
@@ -42,7 +44,7 @@ NESTBOARD_DEVICE_MAP: dict[str, list[str]] = {
     "nestboard_2": ["r3/f1", "r4/l1", "r4/f1", "r5/l1", "r5/f1", "r6/l1", "r6/f1"],
 }
 
-STATUS_TOPIC = "status/"
+STATUS_TOPIC = "status"
 
 OTA_FIRMWARE_DIR = os.getenv("OTA_FIRMWARE_DIR", "firmware")
 SERVER_BASE_URL = os.getenv("SERVER_BASE_URL", "http://localhost:8000")
