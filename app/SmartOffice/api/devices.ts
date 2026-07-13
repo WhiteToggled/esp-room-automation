@@ -35,15 +35,19 @@ export type ScheduleUpdate = Partial<Omit<Schedule, 'id' | 'device_ids' | 'creat
 export interface StatesResponse {
   states: Record<string, number>;
   names: Record<string, string>;
+  // Per-device liveness keyed like `states` (e.g. 'r1/l1'): 1 = online, 0 = offline
+  // (its nestboard hasn't reported in). Absent on older backends — a missing key
+  // should be treated as online so devices don't all appear offline.
+  activity: Record<string, number>;
 }
 
 export async function getStates(): Promise<StatesResponse> {
   const raw = await client.get('/states');
-  // New shape: { states, names }. Stay tolerant of the old flat-map shape.
+  // New shape: { states, names, activity }. Stay tolerant of the old flat-map shape.
   if (raw && typeof raw === 'object' && 'states' in raw) {
-    return { states: raw.states ?? {}, names: raw.names ?? {} };
+    return { states: raw.states ?? {}, names: raw.names ?? {}, activity: raw.activity ?? {} };
   }
-  return { states: (raw ?? {}) as Record<string, number>, names: {} };
+  return { states: (raw ?? {}) as Record<string, number>, names: {}, activity: {} };
 }
 
 export interface Room {

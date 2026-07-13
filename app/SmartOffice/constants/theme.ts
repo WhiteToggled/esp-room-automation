@@ -14,6 +14,8 @@ export const darkColors = {
   toggleOff: 'rgba(255,255,255,0.15)',
   success: '#4ADE80',
   blue: '#60A5FA',
+  // Offline / unreachable device indication (e.g. a nestboard is down).
+  warning: '#F59E0B',
 };
 
 export const lightColors: typeof darkColors = {
@@ -32,6 +34,7 @@ export const lightColors: typeof darkColors = {
   toggleOff: 'rgba(20,22,30,0.14)',
   success: '#1FA15A',
   blue: '#2F7DE0',
+  warning: '#D97706',
 };
 
 export type ThemeColors = typeof darkColors;

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Animated, Vibration } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Animated, Vibration, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { SPACING, RADIUS, ThemeColors } from '../constants/theme';
@@ -80,9 +80,11 @@ const MasterButton: React.FC<MasterButtonProps> = ({
   const startHold = useCallback(() => {
     if (status !== 'idle') return;
     // Short buzz the instant the hold begins, so the press registers immediately.
-    // Vibration drives the motor directly (reliable); haptics adds the iOS Taptic feel.
+    // Vibration drives the motor directly (reliable on both platforms). On Android
+    // a following Haptics call hits the same vibrator and cancels this buzz, so the
+    // Taptic-style haptics are iOS-only.
     Vibration.vibrate(30);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     progress.setValue(0);
     const anim = Animated.timing(progress, {
       toValue: 1, duration: holdMs, useNativeDriver: false,
@@ -93,7 +95,7 @@ const MasterButton: React.FC<MasterButtonProps> = ({
         progress.setValue(0);
         // Strong buzz the moment the destructive action confirms.
         Vibration.vibrate(400);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+        if (Platform.OS === 'ios') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
         runAction();
       }
     });
