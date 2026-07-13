@@ -3,9 +3,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .config import CORS_ORIGINS, DEVICE_TOPIC_MAP, LOG_INTERVAL_MINUTES
+from .config import CORS_ORIGINS, DEVICE_TOPIC_MAP, LOG_INTERVAL_MINUTES, NESTBOARD_DEVICE_MAP
 from .database import Device, DeviceState, RoomName, SessionLocal
-from .state import device_states, device_to_group, group_to_devices, room_names
+from .state import device_states, device_to_group, group_to_devices, nestboard_states, room_names
 from .mqtt import mqtt_client
 from .routers import admin, auth, control, monitoring, ota, schedules
 from .scheduler import scheduler
@@ -42,6 +42,9 @@ async def lifespan(app: FastAPI):
         if mqtt_topic != device_id:
             device_to_group[device_id] = mqtt_topic
             group_to_devices.setdefault(mqtt_topic, []).append(device_id)
+
+    for nestboard_id in NESTBOARD_DEVICE_MAP:
+        nestboard_states[nestboard_id] = 0
 
     init_users_db()
     scheduler.start()

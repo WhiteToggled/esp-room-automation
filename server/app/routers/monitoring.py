@@ -6,10 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ..auth import get_current_user, get_room_from_device
+from ..config import NESTBOARD_DEVICE_MAP
 from ..database import Device, DeviceState, StateLog, get_db
 from ..scheduler import log_device_states
 from ..schemas import LogBucket, StateLogEntry
-from ..state import group_to_devices, room_names
+from ..state import group_to_devices, nestboard_states, room_names
 
 router = APIRouter(tags=["Monitoring"])
 
@@ -41,12 +42,26 @@ def get_all_states(
         }
         visible_rooms = user_rooms
 
+    device_to_nestboard = {
+        dev: nid for nid, devices in NESTBOARD_DEVICE_MAP.items() for dev in devices
+    }
+    device_nestboards = {
+        dev_id: nestboard_states.get(nid, 1)
+        for dev_id, nid in device_to_nestboard.items()
+        if dev_id in states
+    }
+
     names = {rid: room_names.get(rid, rid) for rid in visible_rooms if rid}
     groups = [
         {"mqtt_topic": topic, "device_ids": members}
         for topic, members in group_to_devices.items()
     ]
-    return {"states": states, "names": names, "groups": groups}
+    return {
+        "states": states,
+        "names": names,
+        "groups": groups,
+        "activity": device_nestboards,
+    }
 
 
 @router.get("/logs", response_model=List[StateLogEntry])

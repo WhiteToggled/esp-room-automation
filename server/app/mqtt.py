@@ -10,9 +10,10 @@ from .config import (
     MQTT_TLS,
     MQTT_TRANSPORT,
     MQTT_USER,
+    STATUS_TOPIC,
 )
 from .database import SessionLocal, save_device_state
-from .state import device_states, group_to_devices
+from .state import device_states, group_to_devices, nestboard_states
 
 
 def _on_connect(client, userdata, flags, rc, properties):
@@ -22,12 +23,12 @@ def _on_connect(client, userdata, flags, rc, properties):
         )
         client.subscribe("#")
         client.subscribe(MQTT_SYNC_TOPIC)
+        client.subscribe(STATUS_TOPIC)
     else:
         print(f"MQTT connect failed (rc={rc})")
 
 
 def _apply_state(topic: str, state: int) -> None:
-    """Persist state for an MQTT topic, resolving group membership if applicable."""
     targets = group_to_devices.get(topic)
     if targets:
         db = SessionLocal()
@@ -50,9 +51,6 @@ def _on_message(client, userdata, msg):
     try:
         payload = msg.payload.decode()
         if msg.topic == MQTT_SYNC_TOPIC:
-            # ESP reports state as: "r3:5:6/f1=0"
-            # The left side is the full MQTT topic (may be a group topic like r3:5:6/f1)
-            # which maps to device IDs like r3/f1 via group_to_devices.
             mqtt_topic, _, raw_state = payload.partition("=")
             mqtt_topic = mqtt_topic.strip()
             raw_state = raw_state.strip()
@@ -62,6 +60,16 @@ def _on_message(client, userdata, msg):
                 _apply_state(mqtt_topic, state)
             else:
                 print(f"MQTT sync bad payload on {MQTT_SYNC_TOPIC}: {payload!r}")
+        elif msg.topic == STATUS_TOPIC:
+            nestboard_id, _, raw_state = payload.partition("=")
+            nestboard_id = nestboard_id.strip()
+            raw_state = raw_state.strip()
+            if raw_state in ("0", "1"):
+                state = int(raw_state)
+                nestboard_states[nestboard_id] = state
+                print(f"Nestboard ← {nestboard_id} = {'ONLINE' if state else 'OFFLINE'}")
+            else:
+                print(f"Bad status payload on {STATUS_TOPIC}: {payload!r}")
         else:
             clean_payload = payload.strip()
             if clean_payload in ("0", "1"):
