@@ -17,7 +17,6 @@ import { SPACING, RADIUS, ThemeColors } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import FadeInView from '../components/FadeInView';
-import { getBaseUrl, setBaseUrl } from '../constants/apiConfig';
 import { getBiometricCapability, isEnrolledLocally } from '../api/biometric';
 
 const LoginScreen: React.FC = () => {
@@ -26,11 +25,6 @@ const LoginScreen: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
-  // Runtime-configurable server URL
-  const [showServerConfig, setShowServerConfig] = useState(false);
-  const [serverUrl, setServerUrl] = useState('');
-  const [urlSaved, setUrlSaved] = useState(false);
 
   // Biometric sign-in: only offered when this device has a key enrolled and the
   // OS reports usable biometric hardware.
@@ -41,11 +35,6 @@ const LoginScreen: React.FC = () => {
   const { login, biometricLogin } = useAuth();
   const { colors, theme } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-
-  // Load the currently active server URL into the editable field.
-  useEffect(() => {
-    getBaseUrl().then(setServerUrl).catch(() => {});
-  }, []);
 
   // Decide whether to show the biometric button.
   useEffect(() => {
@@ -72,14 +61,6 @@ const LoginScreen: React.FC = () => {
       setError(result.error || 'Biometric login failed.');
     }
     // On success, navigation is handled by _layout on user state change.
-  };
-
-  const handleSaveUrl = async () => {
-    const normalized = await setBaseUrl(serverUrl);
-    setServerUrl(normalized);
-    setError('');
-    setUrlSaved(true);
-    setTimeout(() => setUrlSaved(false), 2000);
   };
 
   const handleLogin = async () => {
@@ -229,50 +210,6 @@ const LoginScreen: React.FC = () => {
               )}
 
               <Text style={styles.adminHint}>Contact your admin for account access.</Text>
-
-              {/* Server URL config */}
-              <TouchableOpacity
-                style={styles.serverToggle}
-                onPress={() => setShowServerConfig((v) => !v)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="server-outline" size={14} color={colors.textMuted} />
-                <Text style={styles.serverToggleText}>Server settings</Text>
-                <Ionicons
-                  name={showServerConfig ? 'chevron-up' : 'chevron-down'}
-                  size={14}
-                  color={colors.textMuted}
-                />
-              </TouchableOpacity>
-
-              {showServerConfig && (
-                <View style={styles.serverConfig}>
-                  <Text style={styles.label}>Server URL</Text>
-                  <View style={styles.inputWrapper}>
-                    <Ionicons name="link-outline" size={18} color={colors.textMuted} style={styles.inputIcon} />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="https://example.com or 192.168.0.127:8000"
-                      placeholderTextColor={colors.textMuted}
-                      value={serverUrl}
-                      onChangeText={setServerUrl}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      keyboardType="url"
-                      returnKeyType="done"
-                      onSubmitEditing={handleSaveUrl}
-                    />
-                  </View>
-                  <TouchableOpacity style={styles.saveUrlBtn} onPress={handleSaveUrl} activeOpacity={0.8}>
-                    <Ionicons
-                      name={urlSaved ? 'checkmark-circle' : 'save-outline'}
-                      size={16}
-                      color={colors.accent}
-                    />
-                    <Text style={styles.saveUrlText}>{urlSaved ? 'Saved' : 'Save & use'}</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
             </View>
             </FadeInView>
           </ScrollView>
@@ -358,27 +295,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   adminHint: {
     color: colors.textMuted, fontSize: 11,
     textAlign: 'center', marginTop: SPACING.lg,
-  },
-  serverToggle: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    marginTop: SPACING.lg, paddingVertical: SPACING.xs,
-  },
-  serverToggleText: {
-    color: colors.textMuted, fontSize: 12, fontWeight: '500',
-    marginHorizontal: SPACING.xs,
-  },
-  serverConfig: {
-    marginTop: SPACING.sm,
-    paddingTop: SPACING.md,
-    borderTopWidth: 1, borderTopColor: colors.glassBorder,
-  },
-  saveUrlBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    marginTop: SPACING.sm, paddingVertical: SPACING.sm,
-  },
-  saveUrlText: {
-    color: colors.accent, fontSize: 14, fontWeight: '600',
-    marginLeft: SPACING.xs,
   },
 });
 

@@ -24,7 +24,7 @@ import { p256 } from '@noble/curves/p256';
 import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 import client from './client';
-import { getBaseUrl } from '../constants/apiConfig';
+import { BASE_URL } from '../constants/apiConfig';
 
 // ── Storage keys ────────────────────────────────────────────────────────────
 const DEVICE_ID_KEY = 'nestboard_device_id';       // stable per-install id (client-chosen)
@@ -155,7 +155,7 @@ export interface BiometricLoginResult {
 
 // challenge/verify are unauthenticated — a POST that never attaches a token.
 async function postNoAuth(path: string, body: any) {
-  const res = await fetch(`${await getBaseUrl()}${path}`, {
+  const res = await fetch(`${BASE_URL}${path}`, {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
