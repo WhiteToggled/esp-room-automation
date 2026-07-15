@@ -21,11 +21,10 @@ void sync_server();
 void setup() {
     Serial.begin(115200);
 
-    Serial.println("Boo im an updated firmware");
-
     pinMode(STATUS_LED, OUTPUT);
     digitalWrite(STATUS_LED, HIGH);
     pinMode(BOOT_BUTTON_PIN, INPUT_PULLUP);
+
 
     prefs.begin("relay-states", false);
     for (unsigned int i = 0; i < N_DEVICES; ++i) {
@@ -46,14 +45,17 @@ void setup() {
 
     connect_to_wifi();
     mqtt_start();
+
 }
 
 void loop() {
     wm.process();
-    // Serial.println(digitalRead(RELAY_PINS[7]));
-    // if (digitalRead(RELAY_PINS[7]) == LOW) {
-    //     Serial.println("hi");
-    // }
+    if (update_config) {
+        update_config = false;
+        update_prefs();
+        mqtt_reconfigure();
+    }
+
     check_reset();
     detect_switchboard();
     handle_ota_request(); // OTA arrives via MQTT but must run from here
@@ -63,14 +65,7 @@ void loop() {
     } else if (!mqtt_connected) {
         digitalWrite(STATUS_LED, HIGH);
     } else {
-<<<<<<< Updated upstream
-        client.loop();
-    }
-
-    if (WiFi.status() == WL_CONNECTED && client.connected()) {
-=======
         digitalWrite(STATUS_LED, LOW);
->>>>>>> Stashed changes
         sync_server();
     }
 }
@@ -113,14 +108,6 @@ void detect_switchboard() {
 void sync_server() {
     for (int i = 0; i < N_DEVICES; ++i) {
         if (mqtt_pending_updates[i]) {
-<<<<<<< Updated upstream
-            mqtt_pending_updates[i] = false;
-
-            const char *payload =
-                (digitalRead(RELAY_PINS[i]) == LOW) ? "1" : "0";
-            client.publish(MQTT_TOPICS[i], payload);
-            Serial.printf("MQTT Publish: [%s] %s\n", MQTT_TOPICS[i], payload);
-=======
             const char *state = (digitalRead(RELAY_PINS[i]) == LOW) ? "1" : "0";
             char payload[32];
             snprintf(payload, sizeof(payload), "%s=%s", MQTT_TOPICS[i], state);
@@ -132,7 +119,6 @@ void sync_server() {
                 Serial.printf("MQTT Publish: [%s] %s\n", SYNC_SERVER_TOPIC,
                               payload);
             }
->>>>>>> Stashed changes
         }
     }
 }
