@@ -1,0 +1,57 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 512 512"
+  fill="none"
+>
+  <defs>
+    <linearGradient
+      id="boltGradient"
+      x1="256"
+      y1="64"
+      x2="256"
+      y2="448"
+      gradientUnits="userSpaceOnUse"
+    >
+      <stop offset="0%" stop-color="#2690f3" />
+      <stop offset="100%" stop-color="#0d62c4" />
+    </linearGradient>
+
+    <filter
+      id="glow"
+      x="-50%"
+      y="-50%"
+      width="200%"
+      height="200%"
+    >
+      <feGaussianBlur stdDeviation="12" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect
+    width="512"
+    height="512"
+    rx="128"
+    fill="#e5f3fe"
+  />
+
+  <!-- Large bold bolt -->
+  <path
+    d="
+      M305 45
+      L115 275
+      H240
+      L205 470
+      L395 225
+      H275
+      L305 45
+      Z
+    "
+    fill="url(#boltGradient)"
+    filter="url(#glow)"
+  />
+</svg>

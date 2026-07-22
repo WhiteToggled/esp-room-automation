@@ -2,11 +2,11 @@
 .ipynb_checkpoints
 .mypy_cache
 .vscode
-__pycache__
+__pycache__/
 .pytest_cache
 htmlcov
-dist
 site
+site_zensical_src
 .coverage*
 coverage.xml
 .netlify
@@ -14,7 +14,7 @@ test.db
 log.txt
 Pipfile.lock
 env3.*
-env
+.env
 docs_build
 site_build
 venv
@@ -30,10 +30,3 @@ archive.zip
 .DS_Store
 
 .codspeed
-
-# Environment variables
-.env
-
-# SQLite databases
-*.db
-.env

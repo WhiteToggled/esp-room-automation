@@ -1,7 +1,10 @@
+import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from .config import CORS_ORIGINS, DEVICE_TOPIC_MAP, LOG_INTERVAL_MINUTES, NESTBOARD_DEVICE_MAP
 from .database import Device, DeviceState, RoomName, SessionLocal
@@ -83,3 +86,34 @@ app.include_router(ota.router)
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+# -----------------
+
+
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+DIST_DIR = os.path.join(os.path.dirname(CURRENT_DIR), "dist")
+
+app.mount(
+    "/assets",
+    StaticFiles(directory=os.path.join(DIST_DIR, "assets")),
+    name="assets"
+)
+
+
+@app.get("/")
+def serve_landing_page():
+    """Serves the main landing.tsx compiled layout at the root path."""
+    return FileResponse(os.path.join(DIST_DIR, "index.html"))
+
+
+@app.get("/{catchall:path}")
+def serve_spa_fallback(catchall: str):
+    """
+    Catches any browser request. If the file exists in 'dist' (like icon.png),
+    it serves it. Otherwise, it defaults to index.html for React Router.
+    """
+    file_path = os.path.join(DIST_DIR, catchall)
+    if os.path.isfile(file_path):
+        return FileResponse(file_path)
+
+    return FileResponse(os.path.join(DIST_DIR, "index.html"))
