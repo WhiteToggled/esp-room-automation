@@ -196,8 +196,6 @@ developed by \textbf{Abdullah Amir (2024-CS-156)}.
   \item \textbf{User management} — admins can create, delete, reset passwords for
         and assign cabins to users.
   \item \textbf{Theming} — light, dark and system-driven colour schemes.
-  \item \textbf{Runtime server configuration} — the backend URL is editable from
-        the login screen and persisted on device.
 \end{itemize}
 
 %==============================================================================
@@ -444,7 +442,7 @@ A thin \code{fetch} wrapper exposes \code{get}, \code{post}, \code{put},
 \code{x-www-form-urlencoded} login/signup). Each request:
 
 \begin{itemize}[leftmargin=1.4em]
-  \item resolves the base URL asynchronously (see \S\ref{sec:apiconfig});
+  \item is built against the fixed \code{BASE\_URL} (see \S\ref{sec:apiconfig});
   \item attaches \code{Authorization: Bearer <token>} when a token is present;
   \item routes the response through a shared \code{handle()} function.
 \end{itemize}
@@ -524,24 +522,17 @@ interface StateLogEntry {
 }
 \end{lstlisting}
 
-\subsection{Runtime Server Configuration (\texttt{constants/apiConfig.ts})}
+\subsection{Server Configuration (\texttt{constants/apiConfig.ts})}
 \label{sec:apiconfig}
 
-The backend base URL is not hard-coded at build time. Instead it is:
+The module exports two constants: \code{BASE\_URL}, fixed at
+\code{https://nestboard.iotpro.uk}, and \code{TOKEN\_KEY}, the AsyncStorage key
+under which the session token is held. Every request in \code{api/client.ts} and
+\code{api/biometric.ts} is built against \code{BASE\_URL}.
 
-\begin{itemize}[leftmargin=1.4em]
-  \item defaulted to \code{http://192.168.0.127:8000};
-  \item overridable at runtime from the login screen and persisted under
-        \code{nestboard\_base\_url};
-  \item hydrated once into an in-memory cache so request code can read it
-        synchronously after startup.
-\end{itemize}
-
-\code{normalizeBaseUrl()} is lenient: it accepts a bare IP, an
-\code{IP:port}, or a full URL, and infers the scheme — plain \code{http} for LAN
-addresses/\code{localhost}, \code{https} otherwise — before stripping any
-trailing slash. This makes it easy to point the app at different deployments
-(local hardware, a tunnel, or a hosted server) without rebuilding.
+The URL is not user-configurable: all installs talk to the same hosted
+deployment, so pointing the app elsewhere means changing this constant and
+rebuilding.
 
 \subsection{Client-Side Caching (\texttt{hooks/useCachedResource.ts})}
 
@@ -643,11 +634,11 @@ changed.
 \subsection{LoginScreen \& SignupScreen}
 
 Both are form screens sharing the frosted-card aesthetic, keyboard-avoiding
-layout and animated entrance (\code{FadeInView}). \code{LoginScreen} additionally
-hosts the collapsible \textbf{Server settings} panel that reads and writes the
-runtime base URL (\S\ref{sec:apiconfig}). Validation is performed inline;
-network/credential errors are surfaced with specific messages (e.g. invalid
-credentials vs.\ unreachable server, the latter including the target URL).
+layout and animated entrance (\code{FadeInView}). \code{LoginScreen} also offers
+biometric sign-in when the device has a key enrolled. Validation is performed
+inline; network/credential errors are surfaced with specific messages (e.g.
+invalid credentials vs.\ unreachable server, the latter including the target
+URL).
 \code{SignupScreen} enforces matching passwords and a 4-character minimum, and
 explains that an admin will assign a cabin after registration. Navigation after
 success is handled implicitly by the root \code{NavigationGuard}.
@@ -866,9 +857,10 @@ npm install
 npx expo start        # then press a (Android), i (iOS), or w (web)
 \end{lstlisting}
 
-At first launch, open \textbf{Server settings} on the login screen and point the
-app at the backend (default \code{http://192.168.0.127:8000}), then sign in with
-the admin account or a provisioned user.
+The app ships pointed at the hosted backend
+(\code{https://nestboard.iotpro.uk}); sign in with the admin account or a
+provisioned user. To target a different deployment, change \code{BASE\_URL} in
+\code{constants/apiConfig.ts} and rebuild.
 
 %==============================================================================
 \section{Conclusion}

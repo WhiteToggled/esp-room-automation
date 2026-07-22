@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient, { setUnauthorizedHandler } from '../api/client';
-import { getBaseUrlSync, TOKEN_KEY } from '../constants/apiConfig';
+import { BASE_URL, TOKEN_KEY } from '../constants/apiConfig';
 import {
   biometricLogin as bioLogin,
   enrollBiometric,
@@ -148,7 +148,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // failure, or the tunnel URL is down. Surface the real cause instead of hiding it.
       return {
         success: false,
-        error: `Cannot reach server (${getBaseUrlSync()}): ${e?.message || 'network/SSL error'}`,
+        error: `Cannot reach server (${BASE_URL}): ${e?.message || 'network/SSL error'}`,
       };
     }
   };
